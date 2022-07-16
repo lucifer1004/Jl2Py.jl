@@ -6,7 +6,8 @@ using PythonCall
 
 macro __unaryop(jl_expr, op)
     quote
-        operand = __jl2py($(esc(jl_expr)).args[2])
+        jl_expr = $(esc(jl_expr))
+        operand = __jl2py(jl_expr.args[2])
         if isa(operand, Vector)
             operand = operand[1]
         end
@@ -28,6 +29,22 @@ macro __binop(jl_expr, op)
         end
         binop = AST.BinOp(left, $op(), right)
         return [binop]
+    end
+end
+
+macro __boolop(jl_expr, op)
+    quote
+        jl_expr = $(esc(jl_expr))
+        left = __jl2py(jl_expr.args[1])
+        if isa(left, Vector)
+            left = left[1]
+        end
+        right = __jl2py(jl_expr.args[2])
+        if isa(right, Vector)
+            right = right[1]
+        end
+        boolop = AST.BoolOp($op(), [left, right])
+        return [boolop]
     end
 end
 
@@ -76,6 +93,7 @@ end
 
 const AST = PythonCall.pynew()
 const OP_DICT = Dict{Symbol,Py}()
+const OP_UDICT = Dict{Symbol,Py}()
 
 function __jl2py(args::AbstractVector)
     return map(x -> isa(x, Vector) ? x[1] : x, map(__jl2py, args))
@@ -90,7 +108,7 @@ function __jl2py(jl_symbol::Symbol)
 end
 
 function __jl2py(jl_expr::Expr)
-    if jl_expr.head == :block || jl_expr.head == :toplevel
+    if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = []
         for expr in jl_expr.args
             if isa(expr, LineNumberNode)
@@ -106,22 +124,24 @@ function __jl2py(jl_expr::Expr)
         end
 
         return py_exprs
+    elseif jl_expr.head ∈ [:(&&), :(||)]
+        @__boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
-                @__unaryop(jl_expr, AST.UAdd)
+                @__unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
             else
                 @__multiop(jl_expr, OP_DICT[jl_expr.args[1]])
             end
-        elseif jl_expr.args[1] == :-
+        elseif jl_expr.args[1] ∈ [:-, :~, :(!)]
             if length(jl_expr.args) == 2
-                @__unaryop(jl_expr, AST.USub)
+                @__unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
             else
                 @__binop(jl_expr, OP_DICT[jl_expr.args[1]])
             end
         elseif jl_expr.args[1] == :*
             @__multiop(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^]
+        elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
             @__binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
             @__compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
@@ -169,6 +189,11 @@ end
 
 function __init__()
     PythonCall.pycopy!(AST, pyimport("ast"))
+    OP_UDICT[:+] = AST.UAdd
+    OP_UDICT[:-] = AST.USub
+    OP_UDICT[:~] = AST.Invert
+    OP_UDICT[:(!)] = AST.Not
+
     OP_DICT[:+] = AST.Add
     OP_DICT[:-] = AST.Sub
     OP_DICT[:*] = AST.Mult
@@ -190,6 +215,14 @@ function __init__()
     OP_DICT[:in] = AST.In
     OP_DICT[:∈] = AST.In
     OP_DICT[:∉] = AST.NotIn
+    OP_DICT[:(<<)] = AST.LShift
+    OP_DICT[:(>>)] = AST.RShift
+    OP_DICT[:&] = AST.BitAnd
+    OP_DICT[:|] = AST.BitOr
+    OP_DICT[:⊻] = AST.BitXor
+    OP_DICT[:xor] = AST.BitXor
+    OP_DICT[:(&&)] = AST.And
+    OP_DICT[:(||)] = AST.Or
 end
 
 end

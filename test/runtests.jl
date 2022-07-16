@@ -44,6 +44,23 @@ using Test
     # Pow
     @test jl2py("10 ^ 5") == "10 ** 5"
 
+    # Bitwise operators
+    @test jl2py("~2") == "~2"
+    @test jl2py("1 & 2") == "1 & 2"
+    @test jl2py("1 | 2") == "1 | 2"
+    @test jl2py("1 ⊻ 2") == "1 ^ 2"
+    @test jl2py("xor(1, 2)") == "1 ^ 2"
+    @test jl2py("1 << 2") == "1 << 2"
+    @test jl2py("1 >> 2") == "1 >> 2"
+    @test jl2py("1 + (-2 * 6) >> 2") == "1 + (-2 * 6 >> 2)" # Note the different association order
+
+    # Logical operators
+    @test jl2py("!true") == "not True"
+    @test jl2py("!false") == "not False"
+    @test jl2py("!a") == "not a"
+    @test jl2py("true && false") == "True and False"
+    @test jl2py("true || false") == "True or False"
+
     # Complex arithmetic
     @test jl2py("(1 + 5) * (2 - 5) / (3 * 6)") == "(1 + 5) * (2 - 5) / (3 * 6)"
 
