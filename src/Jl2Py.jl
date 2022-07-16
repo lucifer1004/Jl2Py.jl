@@ -94,6 +94,16 @@ end
 const AST = PythonCall.pynew()
 const OP_DICT = Dict{Symbol,Py}()
 const OP_UDICT = Dict{Symbol,Py}()
+const TYPE_DICT = Dict{Symbol,String}()
+
+function __parse_arg(sym::Symbol)
+    return AST.arg(pystr(sym))
+end
+
+function __parse_arg(expr::Expr)
+    expr.head == :(::) || error("Invalid arg expr")
+    return AST.arg(pystr(expr.args[1]), AST.Name(pystr(TYPE_DICT[expr.args[2]])))
+end
 
 function __jl2py(args::AbstractVector)
     return map(x -> isa(x, Vector) ? x[1] : x, map(__jl2py, args))
@@ -124,6 +134,18 @@ function __jl2py(jl_expr::Expr)
         end
 
         return py_exprs
+    elseif jl_expr.head == :function
+        name = jl_expr.args[1].args[1]
+        args = map(__parse_arg, jl_expr.args[1].args[2:end])
+        body = __jl2py(jl_expr.args[2])
+        if isempty(body)
+            push!(body, AST.Pass())
+        elseif !pyis(body[end], AST.Return)
+            body[end] = AST.Return(body[end])
+        end
+
+        # TODO: handle various arguments
+        return [AST.fix_missing_locations(AST.FunctionDef(pystr(name), AST.arguments(args=PyList(args), posonlyargs=PyList(), kwonlyargs=PyList(), defaults=PyList()), PyList(body), PyList(), PyList()))]
     elseif jl_expr.head ∈ [:(&&), :(||)]
         @__boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :call
@@ -146,11 +168,11 @@ function __jl2py(jl_expr::Expr)
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
             @__compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
         else
-            # FIXME: handle keyword arguments
+            # TODO: handle keyword arguments
             func = __jl2py(jl_expr.args[1])
             parameters = __jl2py(jl_expr.args[2:end])
             call = AST.Call(func, parameters, [])
-            return [AST.Expr(call)]
+            return [call]
         end
     elseif jl_expr.head == :comparison
         @__compareop_from_comparison(jl_expr)
@@ -223,6 +245,11 @@ function __init__()
     OP_DICT[:xor] = AST.BitXor
     OP_DICT[:(&&)] = AST.And
     OP_DICT[:(||)] = AST.Or
+
+    TYPE_DICT[:Float64] = "float"
+    TYPE_DICT[:Int64] = "int"
+    TYPE_DICT[:Bool] = "bool"
+    TYPE_DICT[:String] = "str"
 end
 
 end

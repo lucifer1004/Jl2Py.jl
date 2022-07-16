@@ -107,4 +107,15 @@ using Test
     @testset "Function call" begin
         @test jl2py("print(2)") == "print(2)"
     end
+
+    @testset "Multi-line" begin
+        @test jl2py("a = 2; b = 3") == "a = 2\nb = 3"
+    end
+
+    @testset "Function defintion" begin
+        @test jl2py("function f(x) end") == "def f(x):\n    pass"
+        @test jl2py("function f(x) x + 2 end") == "def f(x):\n    return x + 2"
+        @test jl2py("function f(x::Float64) x + 2 end") == "def f(x: float):\n    return x + 2"
+        @test jl2py("function f(x::Int64, y) x + y end") == "def f(x: int, y):\n    return x + y"
+    end
 end
