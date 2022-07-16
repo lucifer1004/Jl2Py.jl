@@ -145,7 +145,10 @@ function __jl2py(jl_expr::Expr)
         end
 
         # TODO: handle various arguments
-        return [AST.fix_missing_locations(AST.FunctionDef(pystr(name), AST.arguments(args=PyList(args), posonlyargs=PyList(), kwonlyargs=PyList(), defaults=PyList()), PyList(body), PyList(), PyList()))]
+        return [AST.fix_missing_locations(AST.FunctionDef(pystr(name),
+                                                          AST.arguments(; args=PyList(args), posonlyargs=PyList(),
+                                                                        kwonlyargs=PyList(), defaults=PyList()),
+                                                          PyList(body), PyList(), PyList()))]
     elseif jl_expr.head ∈ [:(&&), :(||)]
         @__boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :call
@@ -250,6 +253,8 @@ function __init__()
     TYPE_DICT[:Int64] = "int"
     TYPE_DICT[:Bool] = "bool"
     TYPE_DICT[:String] = "str"
+
+    return
 end
 
 end
