@@ -2,93 +2,109 @@ using Jl2Py
 using Test
 
 @testset "Jl2Py.jl" begin
-    # Literal constants
-    @test jl2py("2") == "2"
-    @test jl2py("2.0") == "2.0"
-    @test jl2py("\"hello\"") == "'hello'"
-    @test jl2py("false") == "False"
-    @test jl2py("true") == "True"
-    @test jl2py("foo") == "foo"
+    @testset "Literal constants" begin
+        @test jl2py("2") == "2"
+        @test jl2py("2.0") == "2.0"
+        @test jl2py("\"hello\"") == "'hello'"
+        @test jl2py("false") == "False"
+        @test jl2py("true") == "True"
+        @test jl2py("foo") == "foo"
+    end
 
-    # UAdd & USub
-    @test jl2py("+3") == "3"
-    @test jl2py("-3") == "-3"
-    @test jl2py("+a") == "+a"
-    @test jl2py("-a") == "-a"
+    @testset "UAdd & USub" begin
+        @test jl2py("+3") == "3"
+        @test jl2py("-3") == "-3"
+        @test jl2py("+a") == "+a"
+        @test jl2py("-a") == "-a"
+    end
 
-    # Add
-    @test jl2py("1 + 1") == "1 + 1"
-    @test jl2py("1 + 1 + 1") == "1 + 1 + 1"
-    @test jl2py("1 + 1 + 1 + 1") == "1 + 1 + 1 + 1"
-    @test jl2py("a + 2") == "a + 2"
-    @test jl2py("a + b") == "a + b"
+    @testset "Add" begin
+        @test jl2py("1 + 1") == "1 + 1"
+        @test jl2py("1 + 1 + 1") == "1 + 1 + 1"
+        @test jl2py("1 + 1 + 1 + 1") == "1 + 1 + 1 + 1"
+        @test jl2py("a + 2") == "a + 2"
+        @test jl2py("a + b") == "a + b"
+    end
 
-    # Sub
-    @test jl2py("1 - 1") == "1 - 1"
-    @test jl2py("a - 2") == "a - 2"
-    @test jl2py("a - b") == "a - b"
+    @testset "Sub" begin
+        @test jl2py("1 - 1") == "1 - 1"
+        @test jl2py("a - 2") == "a - 2"
+        @test jl2py("a - b") == "a - b"
+    end
 
-    # Mult
-    @test jl2py("1 * 2") == "1 * 2"
-    @test jl2py("1 * 2 * 3") == "1 * 2 * 3"
+    @testset "Mult" begin
+        @test jl2py("1 * 2") == "1 * 2"
+        @test jl2py("1 * 2 * 3") == "1 * 2 * 3"
+    end
 
-    # Div & FloorDiv
-    @test jl2py("1 / 2") == "1 / 2"
-    @test jl2py("1 ÷ 3") == "1 // 3"
-    @test jl2py("div(3, 1)") == "3 // 1"
+    @testset "Div & FloorDiv" begin
+        @test jl2py("1 / 2") == "1 / 2"
+        @test jl2py("1 ÷ 3") == "1 // 3"
+        @test jl2py("div(3, 1)") == "3 // 1"
+    end
 
-    # Mod
-    @test jl2py("1 % 2") == "1 % 2"
-    @test jl2py("mod(3, 1)") == "3 % 1"
+    @testset "Mod" begin
+        @test jl2py("1 % 2") == "1 % 2"
+        @test jl2py("mod(3, 1)") == "3 % 1"
+    end
 
-    # Pow
-    @test jl2py("10 ^ 5") == "10 ** 5"
+    @testset "Pow" begin
+        @test jl2py("10 ^ 5") == "10 ** 5"
+    end
 
-    # Bitwise operators
-    @test jl2py("~2") == "~2"
-    @test jl2py("1 & 2") == "1 & 2"
-    @test jl2py("1 | 2") == "1 | 2"
-    @test jl2py("1 ⊻ 2") == "1 ^ 2"
-    @test jl2py("xor(1, 2)") == "1 ^ 2"
-    @test jl2py("1 << 2") == "1 << 2"
-    @test jl2py("1 >> 2") == "1 >> 2"
-    @test jl2py("1 + (-2 * 6) >> 2") == "1 + (-2 * 6 >> 2)" # Note the different association order
+    @testset "Bitwise operators" begin
+        @test jl2py("~2") == "~2"
+        @test jl2py("1 & 2") == "1 & 2"
+        @test jl2py("1 | 2") == "1 | 2"
+        @test jl2py("1 ⊻ 2") == "1 ^ 2"
+        @test jl2py("xor(1, 2)") == "1 ^ 2"
+        @test jl2py("1 << 2") == "1 << 2"
+        @test jl2py("1 >> 2") == "1 >> 2"
+        @test jl2py("1 + (-2 * 6) >> 2") == "1 + (-2 * 6 >> 2)" # Note the different association order
+    end
 
-    # Logical operators
-    @test jl2py("!true") == "not True"
-    @test jl2py("!false") == "not False"
-    @test jl2py("!a") == "not a"
-    @test jl2py("true && false") == "True and False"
-    @test jl2py("true || false") == "True or False"
+    @testset "Logical operators" begin
+        @test jl2py("!true") == "not True"
+        @test jl2py("!false") == "not False"
+        @test jl2py("!a") == "not a"
+        @test jl2py("true && false") == "True and False"
+        @test jl2py("true || false") == "True or False"
+    end
 
-    # Complex arithmetic
-    @test jl2py("(1 + 5) * (2 - 5) / (3 * 6)") == "(1 + 5) * (2 - 5) / (3 * 6)"
+    @testset "Complex arithmetic" begin
+        @test jl2py("(1 + 5) * (2 - 5) / (3 * 6)") == "(1 + 5) * (2 - 5) / (3 * 6)"
+    end
 
-    # Binary comparisons
-    @test jl2py("1 == 2") == "1 == 2"
-    @test jl2py("1 === 2") == "1 == 2"
-    @test jl2py("1 != 2") == "1 != 2"
-    @test jl2py("1 < 2") == "1 < 2"
-    @test jl2py("1 <= 2") == "1 <= 2"
-    @test jl2py("1 > 2") == "1 > 2"
-    @test jl2py("1 >= 2") == "1 >= 2"
+    @testset "Binary comparisons" begin
+        @test jl2py("1 == 2") == "1 == 2"
+        @test jl2py("1 === 2") == "1 == 2"
+        @test jl2py("1 != 2") == "1 != 2"
+        @test jl2py("1 < 2") == "1 < 2"
+        @test jl2py("1 <= 2") == "1 <= 2"
+        @test jl2py("1 > 2") == "1 > 2"
+        @test jl2py("1 >= 2") == "1 >= 2"
+    end
 
-    # Multiple comparisons
-    @test jl2py("1 < 2 < 3") == "1 < 2 < 3"
-    @test jl2py("1 < 2 < 3 < 4") == "1 < 2 < 3 < 4"
-    @test jl2py("3 > 2 != 3 == 3") == "3 > 2 != 3 == 3"
+    @testset "Multiple comparisons" begin
+        @test jl2py("1 < 2 < 3") == "1 < 2 < 3"
+        @test jl2py("1 < 2 < 3 < 4") == "1 < 2 < 3 < 4"
+        @test jl2py("3 > 2 != 3 == 3") == "3 > 2 != 3 == 3"
+    end
 
-    # List
-    @test jl2py("[1, 2, 3]") == "[1, 2, 3]"
-    @test jl2py("[1, 2 + 3, 3]") == "[1, 2 + 3, 3]"
-    @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
+    @testset "List" begin
+        @test jl2py("[1, 2, 3]") == "[1, 2, 3]"
+        @test jl2py("[1, 2 + 3, 3]") == "[1, 2 + 3, 3]"
+        @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
+    end
 
-    # Assign
-    @test jl2py("a = 2") == "a = 2"
-    @test jl2py("a = 2 + 3") == "a = 2 + 3"
-    @test jl2py("a = b = 2") == "a = b = 2"
-    @test jl2py("a = b = c = 23 + 3") == "a = b = c = 23 + 3"
+    @testset "Assign" begin
+        @test jl2py("a = 2") == "a = 2"
+        @test jl2py("a = 2 + 3") == "a = 2 + 3"
+        @test jl2py("a = b = 2") == "a = b = 2"
+        @test jl2py("a = b = c = 23 + 3") == "a = b = c = 23 + 3"
+    end
 
-    # Function call
-    @test jl2py("print(2)") == "print(2)"
+    @testset "Function call" begin
+        @test jl2py("print(2)") == "print(2)"
+    end
 end
