@@ -187,7 +187,11 @@ using Test
 
     @testset "Function defintion" begin
         @test jl2py("function f(x) end") == "def f(x):\n    pass"
+        @test jl2py("function f(x) return x end") == "def f(x):\n    return x"
         @test jl2py("function f(x) x + 2 end") == "def f(x):\n    return x + 2"
+        @test jl2py("function f(x) x = 2 end") == "def f(x):\n    x = 2\n    return x"
+        @test jl2py("function f(x) x += 2 end") == "def f(x):\n    x += 2\n    return x"
+        @test jl2py("function f(x) g(x) end") == "def f(x):\n    return g(x)"
         @test jl2py("function f(x::Float64) x + 2 end") == "def f(x: float):\n    return x + 2"
         @test jl2py("function f(x::Int64, y) x + y end") == "def f(x: int, y):\n    return x + y"
     end

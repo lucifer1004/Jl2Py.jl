@@ -90,8 +90,16 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         body = __jl2py(jl_expr.args[2])
         if isempty(body)
             push!(body, AST.Pass())
-        elseif !pyis(body[end], AST.Return)
-            body[end] = AST.Return(body[end])
+        elseif !pyisinstance(body[end], AST.Return)
+            if pyisinstance(body[end], AST.Assign)
+                push!(body, AST.Return(body[end].targets[0]))
+            elseif pyisinstance(body[end], AST.AugAssign)
+                push!(body, AST.Return(body[end].target))
+            elseif pyisinstance(body[end], AST.Expr)
+                body[end] = AST.Return(body[end].value)
+            else
+                body[end] = AST.Return(body[end])
+            end
         end
 
         # TODO: handle various arguments
@@ -129,6 +137,9 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         iter = __jl2py(jl_expr.args[1].args[2])
         body = __jl2py(jl_expr.args[2])
         return AST.fix_missing_locations(AST.For(target, iter, body, nothing, nothing))
+    elseif jl_expr.head == :return
+        value = __jl2py(jl_expr.args[1])
+        return AST.Return(value)
     elseif jl_expr.head == :ref
         value = __jl2py(jl_expr.args[1])
         if isa(jl_expr.args[2], Expr) && jl_expr.args[2].args[1] == :(:)
