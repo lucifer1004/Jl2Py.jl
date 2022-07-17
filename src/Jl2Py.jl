@@ -164,6 +164,10 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
+        elseif jl_expr.args[1] == :Set ||
+               (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
+            keys = __jl2py(jl_expr.args[2:end])
+            return [AST.fix_missing_locations(AST.Set(PyList(keys)))]
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
             keys = []

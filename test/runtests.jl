@@ -102,6 +102,11 @@ using Test
         @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
     end
 
+    @testset "Set" begin
+        @test jl2py("Set(1, 2, 3)") == "{1, 2, 3}"
+        @test jl2py("Set{Number}(1, 2, 3)") == "{1, 2, 3}"
+    end
+
     @testset "Dict" begin
         @test jl2py("Dict(1=>2, 3=>14)") == "{1: 2, 3: 14}"
         @test jl2py("Dict{Number,Number}(1=>2, 3=>14)") == "{1: 2, 3: 14}" # Type info is discarded
