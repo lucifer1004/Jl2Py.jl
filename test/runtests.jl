@@ -161,6 +161,12 @@ using Test
               "for (x, y) in zip(a, b):\n    print(x)"
     end
 
+    @testset "Subscript" begin
+        @test jl2py("a[1]") == "a[1]"
+        @test jl2py("a[1:5]") == "a[1:5]"
+        @test jl2py("a[1:2:5]") == "a[1:5:2]"
+    end
+
     @testset "Function call" begin
         @test jl2py("print(2)") == "print(2)"
     end

@@ -129,6 +129,19 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         iter = __jl2py(jl_expr.args[1].args[2])
         body = __jl2py(jl_expr.args[2])
         return AST.fix_missing_locations(AST.For(target, iter, body, nothing, nothing))
+    elseif jl_expr.head == :ref
+        value = __jl2py(jl_expr.args[1])
+        if isa(jl_expr.args[2], Expr) && jl_expr.args[2].args[1] == :(:)
+            args = __jl2py(jl_expr.args[2].args[2:end])
+            slice = if length(args) == 2
+                AST.Slice(args[1], args[2])
+            elseif length(args) == 3
+                AST.Slice(args[1], args[3], args[2])
+            end
+        else
+            slice = __jl2py(jl_expr.args[2])
+        end
+        return AST.Subscript(value, slice)
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
