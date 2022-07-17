@@ -54,13 +54,13 @@ const OP_DICT = Dict{Symbol,Py}()
 const OP_UDICT = Dict{Symbol,Py}()
 const TYPE_DICT = Dict{Symbol,String}()
 
-function __parse_arg(sym::Symbol)
-    return AST.arg(pystr(sym))
-end
-
-function __parse_arg(expr::Expr)
-    expr.head == :(::) || error("Invalid arg expr")
-    return AST.arg(pystr(expr.args[1]), AST.Name(pystr(TYPE_DICT[expr.args[2]])))
+function __parse_arg(expr::Union{Symbol,Expr})
+    if isa(expr, Symbol)
+        return AST.arg(pystr(expr))
+    else
+        expr.head == :(::) || error("Invalid arg expr")
+        return AST.arg(pystr(expr.args[1]), AST.Name(pystr(TYPE_DICT[expr.args[2]])))
+    end
 end
 
 function __parse_pair(expr::Expr)
@@ -69,7 +69,7 @@ function __parse_pair(expr::Expr)
 end
 
 function __jl2py(args::AbstractVector)
-    return map(x -> isa(x, Vector) ? x[1] : x, map(__jl2py, args))
+    return map(__jl2py, args)
 end
 
 function __jl2py(jl_constant::Union{Number,String})
