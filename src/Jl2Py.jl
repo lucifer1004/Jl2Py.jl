@@ -138,17 +138,6 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                                                           PyList(body), PyList(), PyList()))]
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
-    elseif jl_expr.head == :curly
-        if jl_expr.args[1] == :Dict || (jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
-            keys = []
-            values = []
-            for arg in jl_expr.args[2:end]
-                key, value = __parse_pair(arg)
-                push!(keys, key)
-                push!(values, value)
-            end
-            return [AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))]
-        end
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
@@ -175,6 +164,16 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
+        elseif jl_expr.args[1] == :Dict ||
+               (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
+            keys = []
+            values = []
+            for arg in jl_expr.args[2:end]
+                key, value = __parse_pair(arg)
+                push!(keys, key)
+                push!(values, value)
+            end
+            return [AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))]
         else
             # TODO: handle keyword arguments
             func = __jl2py(jl_expr.args[1])

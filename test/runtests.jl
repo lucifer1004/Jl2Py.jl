@@ -103,8 +103,8 @@ using Test
     end
 
     @testset "Dict" begin
-        @test jl2py("Dict{1=>2, 3=>14}") == "{1: 2, 3: 14}"
-        @test jl2py("Dict{Number,Number}{1=>2, 3=>14}") == "{1: 2, 3: 14}" # Type info is discarded
+        @test jl2py("Dict(1=>2, 3=>14)") == "{1: 2, 3: 14}"
+        @test jl2py("Dict{Number,Number}(1=>2, 3=>14)") == "{1: 2, 3: 14}" # Type info is discarded
     end
 
     @testset "Assign" begin
