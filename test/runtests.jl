@@ -127,10 +127,10 @@ using Test
     end
 
     @testset "Expansion" begin
-        @test jl2py("(a...)") == "(*a)"
+        @test jl2py("(a...,)") == "(*a,)"
         @test jl2py("[a..., b...]") == "[*a, *b]"
         @test jl2py("Set(a..., b)") == "{*a, b}"
-        @test jl2py("Dict(a..., b)") == "{**a, b}"
+        @test jl2py("Dict(a..., b => c)") == "{**a, b: c}"
     end
 
     @testset "Assign" begin
