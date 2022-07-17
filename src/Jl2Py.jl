@@ -55,12 +55,11 @@ function __multiop(jl_expr, op)
     return binop
 end
 
-function __parse_arg(expr::Union{Symbol,Expr})
-    if isa(expr, Symbol)
-        return AST.arg(pystr(expr))
-    else
-        expr.head == :(::) || error("Invalid arg expr")
-        return AST.arg(pystr(expr.args[1]), AST.Name(pystr(TYPE_DICT[expr.args[2]])))
+function __parse_arg(arg)
+    if isa(arg, Symbol)
+        return AST.arg(pystr(arg))
+    elseif arg.head == :(::)
+        return AST.arg(pystr(arg.args[1]), AST.Name(pystr(TYPE_DICT[arg.args[2]])))
     end
 end
 
@@ -87,7 +86,35 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         return PyList(py_exprs)
     elseif jl_expr.head == :function
         name = jl_expr.args[1].args[1]
-        args = map(__parse_arg, jl_expr.args[1].args[2:end])
+        posonlyargs = []
+        defaults = []
+        kwonlyargs = []
+        kw_defaults = []
+        kwarg = nothing
+        vararg = nothing
+        for arg in jl_expr.args[1].args[2:end]
+            if isa(arg, Symbol) || arg.head == :(::)
+                push!(posonlyargs, __parse_arg(arg))
+            elseif arg.head == :kw
+                push!(posonlyargs, __parse_arg(arg.args[1]))
+                push!(defaults, __jl2py(arg.args[2]))
+            elseif arg.head == :...
+                vararg = __parse_arg(arg.args[1])
+            elseif arg.head == :parameters
+                for param in arg.args
+                    if isa(param, Symbol)
+                        push!(kwonlyargs, __parse_arg(param))
+                        push!(kw_defaults, nothing)
+                    elseif param.head == :kw
+                        push!(kwonlyargs, __parse_arg(param.args[1]))
+                        push!(kw_defaults, __jl2py(param.args[2]))
+                    elseif param.head == :...
+                        kwarg = __parse_arg(param.args[1])
+                    end
+                end
+            end
+        end
+
         body = __jl2py(jl_expr.args[2])
         if isempty(body)
             push!(body, AST.Pass())
@@ -103,11 +130,14 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             end
         end
 
-        # TODO: handle various arguments
         return AST.fix_missing_locations(AST.FunctionDef(pystr(name),
-                                                         AST.arguments(; args=PyList(args), posonlyargs=PyList(),
-                                                                       kwonlyargs=PyList(), defaults=PyList()),
-                                                         PyList(body), PyList(), PyList()))
+                                                         AST.arguments(; args=PyList(),
+                                                                       posonlyargs=PyList(posonlyargs),
+                                                                       kwonlyargs=PyList(kwonlyargs),
+                                                                       defaults=PyList(defaults),
+                                                                       kw_defaults=PyList(kw_defaults),
+                                                                       kwarg=kwarg, vararg=vararg), PyList(body),
+                                                         PyList(), PyList()))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :tuple

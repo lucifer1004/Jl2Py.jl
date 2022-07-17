@@ -200,17 +200,24 @@ using Test
             a = f(3)
             f(4)
         end
-    """) == "def f(x: int, y: int):\n    return x + y\na = f(3)\nf(4)"
+    """) == "def f(x: int, y: int, /):\n    return x + y\na = f(3)\nf(4)"
     end
 
     @testset "Function defintion" begin
-        @test jl2py("function f(x) end") == "def f(x):\n    pass"
-        @test jl2py("function f(x) return x end") == "def f(x):\n    return x"
-        @test jl2py("function f(x) x + 2 end") == "def f(x):\n    return x + 2"
-        @test jl2py("function f(x) x = 2 end") == "def f(x):\n    x = 2\n    return x"
-        @test jl2py("function f(x) x += 2 end") == "def f(x):\n    x += 2\n    return x"
-        @test jl2py("function f(x) g(x) end") == "def f(x):\n    return g(x)"
-        @test jl2py("function f(x::Float64) x + 2 end") == "def f(x: float):\n    return x + 2"
-        @test jl2py("function f(x::Int64, y) x + y end") == "def f(x: int, y):\n    return x + y"
+        @test jl2py("function f(x) end") == "def f(x, /):\n    pass"
+        @test jl2py("function f(x) return x end") == "def f(x, /):\n    return x"
+        @test jl2py("function f(x) x + 2 end") == "def f(x, /):\n    return x + 2"
+        @test jl2py("function f(x) x = 2 end") == "def f(x, /):\n    x = 2\n    return x"
+        @test jl2py("function f(x) x += 2 end") == "def f(x, /):\n    x += 2\n    return x"
+        @test jl2py("function f(x) g(x) end") == "def f(x, /):\n    return g(x)"
+        @test jl2py("function f(x::Float64) x + 2 end") == "def f(x: float, /):\n    return x + 2"
+        @test jl2py("function f(x::Int64, y) x + y end") == "def f(x: int, y, /):\n    return x + y"
+        @test jl2py("function f(x=2, y=3) x + y end") == "def f(x=2, y=3, /):\n    return x + y"
+        @test jl2py("function f(x::Int=2, y=3) x + y end") == "def f(x: int=2, y=3, /):\n    return x + y"
+        @test jl2py("function f(;x::Int=2, y=3) x + y end") == "def f(*, x: int=2, y=3):\n    return x + y"
+        @test jl2py("function f(b...;x::Float32=2, y) x + y end") ==
+              "def f(*b, x: float=2, y):\n    return x + y"
+        @test jl2py("function f(a,b,c...;x::Float32=2, y) x + y end") ==
+              "def f(a, b, /, *c, x: float=2, y):\n    return x + y"
     end
 end
