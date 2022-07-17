@@ -83,6 +83,9 @@ using Test
         @test jl2py("1 <= 2") == "1 <= 2"
         @test jl2py("1 > 2") == "1 > 2"
         @test jl2py("1 >= 2") == "1 >= 2"
+        @test jl2py("a ∈ b") == "a in b"
+        @test jl2py("a in b") == "a in b"
+        @test jl2py("a ∉ b") == "a not in b"
     end
 
     @testset "Multiple comparisons" begin

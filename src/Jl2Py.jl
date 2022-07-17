@@ -177,7 +177,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             end
         elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
+        elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=, :∈, :∉, :in]
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] == :Set ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
