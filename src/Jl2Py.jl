@@ -166,6 +166,13 @@ function __jl2py(jl_expr::Expr)
             end
         elseif jl_expr.args[1] == :*
             @__multiop(jl_expr, OP_DICT[jl_expr.args[1]])
+        elseif jl_expr.args[1] == :(:)
+            args = __jl2py(jl_expr.args[2:end])
+            if length(args) == 2
+                return [AST.Call(AST.Name("range"), args, [])]
+            elseif length(args) == 3
+                return [AST.Call(AST.Name("range"), [args[1], args[3], args[2]], [])]
+            end
         elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
             @__binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]

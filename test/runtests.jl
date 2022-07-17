@@ -91,6 +91,11 @@ using Test
         @test jl2py("3 > 2 != 3 == 3") == "3 > 2 != 3 == 3"
     end
 
+    @testset "Ranges" begin
+        @test jl2py("1:10") == "range(1, 10)"
+        @test jl2py("1:2:10") == "range(1, 10, 2)"
+    end
+
     @testset "List" begin
         @test jl2py("[1, 2, 3]") == "[1, 2, 3]"
         @test jl2py("[1, 2 + 3, 3]") == "[1, 2 + 3, 3]"
