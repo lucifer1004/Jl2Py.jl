@@ -4,91 +4,73 @@ export jl2py
 
 using PythonCall
 
-macro __unaryop(jl_expr, op)
-    quote
-        jl_expr = $(esc(jl_expr))
-        operand = __jl2py(jl_expr.args[2])
-        if isa(operand, Vector)
-            operand = operand[1]
-        end
-        unaryop = AST.UnaryOp($op(), operand)
-        return [unaryop]
+function __unaryop(jl_expr, op)
+    operand = __jl2py(jl_expr.args[2])
+    if isa(operand, Vector)
+        operand = operand[1]
     end
+    unaryop = AST.UnaryOp(op(), operand)
+    return [unaryop]
 end
 
-macro __binop(jl_expr, op)
-    quote
-        jl_expr = $(esc(jl_expr))
-        left = __jl2py(jl_expr.args[2])
-        if isa(left, Vector)
-            left = left[1]
-        end
-        right = __jl2py(jl_expr.args[3])
+function __binop(jl_expr, op)
+    left = __jl2py(jl_expr.args[2])
+    if isa(left, Vector)
+        left = left[1]
+    end
+    right = __jl2py(jl_expr.args[3])
+    if isa(right, Vector)
+        right = right[1]
+    end
+    binop = AST.BinOp(left, op(), right)
+    return [binop]
+end
+
+function __boolop(jl_expr, op)
+    left = __jl2py(jl_expr.args[1])
+    if isa(left, Vector)
+        left = left[1]
+    end
+    right = __jl2py(jl_expr.args[2])
+    if isa(right, Vector)
+        right = right[1]
+    end
+    boolop = AST.BoolOp(op(), [left, right])
+    return [boolop]
+end
+
+function __compareop_from_comparison(jl_expr)
+    elts = __jl2py(jl_expr.args[1:2:end])
+    ops = map(x -> OP_DICT[x](), jl_expr.args[2:2:end])
+    compareop = AST.Compare(elts[1], ops, elts[2:end])
+    return [compareop]
+end
+
+function __compareop_from_call(jl_expr, op)
+    elts = __jl2py(jl_expr.args[2:end])
+    compareop = AST.Compare(elts[1], [op()], elts[2:end])
+    return [compareop]
+end
+
+function __multiop(jl_expr, op)
+    left = __jl2py(jl_expr.args[2])
+    if isa(left, Vector)
+        left = left[1]
+    end
+    right = __jl2py(jl_expr.args[3])
+    if isa(right, Vector)
+        right = right[1]
+    end
+    binop = AST.BinOp(left, op(), right)
+    argcnt = length(jl_expr.args)
+    for i in 4:argcnt
+        right = __jl2py(jl_expr.args[i])
         if isa(right, Vector)
             right = right[1]
         end
-        binop = AST.BinOp(left, $op(), right)
-        return [binop]
+        binop = AST.BinOp(binop, op(), right)
     end
-end
-
-macro __boolop(jl_expr, op)
-    quote
-        jl_expr = $(esc(jl_expr))
-        left = __jl2py(jl_expr.args[1])
-        if isa(left, Vector)
-            left = left[1]
-        end
-        right = __jl2py(jl_expr.args[2])
-        if isa(right, Vector)
-            right = right[1]
-        end
-        boolop = AST.BoolOp($op(), [left, right])
-        return [boolop]
-    end
-end
-
-macro __compareop_from_comparison(jl_expr)
-    quote
-        jl_expr = $(esc(jl_expr))
-        elts = __jl2py(jl_expr.args[1:2:end])
-        ops = map(x -> OP_DICT[x](), jl_expr.args[2:2:end])
-        compareop = AST.Compare(elts[1], ops, elts[2:end])
-        return [compareop]
-    end
-end
-
-macro __compareop_from_call(jl_expr, op)
-    quote
-        jl_expr = $(esc(jl_expr))
-        elts = __jl2py(jl_expr.args[2:end])
-        compareop = AST.Compare(elts[1], [$op()], elts[2:end])
-        return [compareop]
-    end
-end
-
-macro __multiop(jl_expr, op)
-    quote
-        jl_expr = $(esc(jl_expr))
-        left = __jl2py(jl_expr.args[2])
-        if isa(left, Vector)
-            left = left[1]
-        end
-        right = __jl2py(jl_expr.args[3])
-        if isa(right, Vector)
-            right = right[1]
-        end
-        binop = AST.BinOp(left, $op(), right)
-        argcnt = length(jl_expr.args)
-        for i in 4:argcnt
-            right = __jl2py(jl_expr.args[i])
-            if isa(right, Vector)
-                right = right[1]
-            end
-            binop = AST.BinOp(binop, $op(), right)
-        end
-        return [binop]
-    end
+    return [binop]
 end
 
 const AST = PythonCall.pynew()
@@ -155,7 +137,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                                                                         kwonlyargs=PyList(), defaults=PyList()),
                                                           PyList(body), PyList(), PyList()))]
     elseif jl_expr.head ∈ [:(&&), :(||)]
-        @__boolop(jl_expr, OP_DICT[jl_expr.head])
+        __boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :curly
         if jl_expr.args[1] == :Dict || (jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
             keys = []
@@ -170,18 +152,18 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
-                @__unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
+                __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
             else
-                @__multiop(jl_expr, OP_DICT[jl_expr.args[1]])
+                __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
             end
         elseif jl_expr.args[1] ∈ [:-, :~, :(!)]
             if length(jl_expr.args) == 2
-                @__unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
+                __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
             else
-                @__binop(jl_expr, OP_DICT[jl_expr.args[1]])
+                __binop(jl_expr, OP_DICT[jl_expr.args[1]])
             end
         elseif jl_expr.args[1] == :*
-            @__multiop(jl_expr, OP_DICT[jl_expr.args[1]])
+            __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] == :(:)
             args = __jl2py(jl_expr.args[2:end])
             if length(args) == 2
@@ -190,9 +172,9 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                 return [AST.Call(AST.Name("range"), [args[1], args[3], args[2]], [])]
             end
         elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
-            @__binop(jl_expr, OP_DICT[jl_expr.args[1]])
+            __binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=]
-            @__compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
+            __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
         else
             # TODO: handle keyword arguments
             func = __jl2py(jl_expr.args[1])
@@ -201,7 +183,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             return topofblock ? [AST.Expr(call)] : [call]
         end
     elseif jl_expr.head == :comparison
-        @__compareop_from_comparison(jl_expr)
+        __compareop_from_comparison(jl_expr)
     elseif jl_expr.head == :(=)
         targets = PyList()
         curr = jl_expr.args
