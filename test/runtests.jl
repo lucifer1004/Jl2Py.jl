@@ -170,8 +170,11 @@ using Test
         @test jl2py("a[1:2:5]") == "a[1:5:2]"
     end
 
-    @testset "Function call" begin
+    @testset "Function call (and builtins)" begin
         @test jl2py("print(2)") == "print(2)"
+        @test jl2py("println(2)") == "print(2)"
+        @test jl2py("length(a)") == "len(a)"
+        @test jl2py("sort([2, 3, 4])") == "sorted([2, 3, 4])"
     end
 
     @testset "Multi-line" begin

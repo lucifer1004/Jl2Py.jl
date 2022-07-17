@@ -53,6 +53,7 @@ const AST = PythonCall.pynew()
 const OP_DICT = Dict{Symbol,Py}()
 const OP_UDICT = Dict{Symbol,Py}()
 const TYPE_DICT = Dict{Symbol,String}()
+const BUILTIN_DICT = Dict{Symbol,String}()
 
 function __parse_arg(expr::Union{Symbol,Expr})
     if isa(expr, Symbol)
@@ -181,21 +182,25 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] == :Set ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
-            keys = __jl2py(jl_expr.args[2:end])
-            return AST.fix_missing_locations(AST.Set(PyList(keys)))
+            items = __jl2py(jl_expr.args[2:end])
+            return AST.fix_missing_locations(AST.Set(PyList(items)))
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
-            keys = []
+            items = []
             values = []
             for arg in jl_expr.args[2:end]
-                key, value = __parse_pair(arg)
-                push!(keys, key)
+                item, value = __parse_pair(arg)
+                push!(items, item)
                 push!(values, value)
             end
-            return AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))
+            return AST.fix_missing_locations(AST.Dict(PyList(items), PyList(values)))
         else
             # TODO: handle keyword arguments
-            func = __jl2py(jl_expr.args[1])
+            if isa(jl_expr.args[1], Symbol) && jl_expr.args[1] ∈ keys(BUILTIN_DICT)
+                func = AST.Name(BUILTIN_DICT[jl_expr.args[1]])
+            else
+                func = __jl2py(jl_expr.args[1])
+            end
             parameters = __jl2py(jl_expr.args[2:end])
             call = AST.Call(func, parameters, [])
             return topofblock ? AST.Expr(call) : call
@@ -296,6 +301,11 @@ function __init__()
     TYPE_DICT[:Bool] = "bool"
     TYPE_DICT[:Char] = "str"
     TYPE_DICT[:String] = "str"
+
+    BUILTIN_DICT[:length] = "len"
+    BUILTIN_DICT[:sort] = "sorted"
+    BUILTIN_DICT[:print] = "print"
+    BUILTIN_DICT[:println] = "print"
 
     return
 end
