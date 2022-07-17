@@ -254,9 +254,22 @@ function __init__()
     OP_DICT[:(&&)] = AST.And
     OP_DICT[:(||)] = AST.Or
 
+    TYPE_DICT[:Float32] = "float"
     TYPE_DICT[:Float64] = "float"
+    TYPE_DICT[:Int] = "int"
+    TYPE_DICT[:Int8] = "int"
+    TYPE_DICT[:Int16] = "int"
+    TYPE_DICT[:Int32] = "int"
     TYPE_DICT[:Int64] = "int"
+    TYPE_DICT[:Int128] = "int"
+    TYPE_DICT[:UInt] = "int"
+    TYPE_DICT[:UInt8] = "int"
+    TYPE_DICT[:UInt16] = "int"
+    TYPE_DICT[:UInt32] = "int"
+    TYPE_DICT[:UInt64] = "int"
+    TYPE_DICT[:UInt128] = "int"
     TYPE_DICT[:Bool] = "bool"
+    TYPE_DICT[:Char] = "str"
     TYPE_DICT[:String] = "str"
 
     return
