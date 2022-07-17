@@ -101,6 +101,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                                                          PyList(body), PyList(), PyList()))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
+    elseif jl_expr.head == :tuple
+        return AST.Tuple(__jl2py(jl_expr.args))
     elseif jl_expr.head ∈ [:if, :elseif]
         # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
         test = __jl2py(jl_expr.args[1])
@@ -122,6 +124,11 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         test = __jl2py(jl_expr.args[1])
         body = __jl2py(jl_expr.args[2])
         return AST.While(test, body, nothing)
+    elseif jl_expr.head == :for
+        target = __jl2py(jl_expr.args[1].args[1])
+        iter = __jl2py(jl_expr.args[1].args[2])
+        body = __jl2py(jl_expr.args[2])
+        return AST.fix_missing_locations(AST.For(target, iter, body, nothing, nothing))
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2

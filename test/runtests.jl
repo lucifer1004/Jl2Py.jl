@@ -106,6 +106,13 @@ using Test
         @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
     end
 
+    @testset "Tuple" begin
+        @test jl2py("(1,)") == "(1,)"
+        @test jl2py("(1, 2, 3)") == "(1, 2, 3)"
+        @test jl2py("(1, 2, 3,)") == "(1, 2, 3)"
+        @test jl2py("(a, a + b, c)") == "(a, a + b, c)"
+    end
+
     @testset "Set" begin
         @test jl2py("Set(1, 2, 3)") == "{1, 2, 3}"
         @test jl2py("Set{Number}(1, 2, 3)") == "{1, 2, 3}"
@@ -147,6 +154,11 @@ using Test
 
     @testset "While statement" begin
         @test jl2py("while x > 3 x -= 1 end") == "while x > 3:\n    x -= 1"
+    end
+
+    @testset "For statement" begin
+        @test jl2py("for (x, y) in zip(a, b) print(x) end") ==
+              "for (x, y) in zip(a, b):\n    print(x)"
     end
 
     @testset "Function call" begin
