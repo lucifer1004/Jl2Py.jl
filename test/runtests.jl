@@ -145,6 +145,10 @@ using Test
               "if x > 3:\n    x += 2\nelif x < 0:\n    x -= 1"
     end
 
+    @testset "While statement" begin
+        @test jl2py("while x > 3 x -= 1 end") == "while x > 3:\n    x -= 1"
+    end
+
     @testset "Function call" begin
         @test jl2py("print(2)") == "print(2)"
     end

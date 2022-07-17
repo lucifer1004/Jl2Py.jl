@@ -118,6 +118,10 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             orelse = __jl2py(jl_expr.args[3])
             return AST.IfExp(test, body, orelse)
         end
+    elseif jl_expr.head == :while
+        test = __jl2py(jl_expr.args[1])
+        body = __jl2py(jl_expr.args[2])
+        return AST.While(test, body, nothing)
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
