@@ -182,6 +182,11 @@ using Test
         @test jl2py("println(2)") == "print(2)"
         @test jl2py("length(a)") == "len(a)"
         @test jl2py("sort([2, 3, 4])") == "sorted([2, 3, 4])"
+        @test jl2py("f(a)") == "f(a)"
+        @test jl2py("f(a, b)") == "f(a, b)"
+        @test jl2py("f(a, b; c = 2)") == "f(a, b, c=2)"
+        @test jl2py("f(a, b; kw...)") == "f(a, b, **kw)"
+        @test jl2py("f(a, b, d...; c = 2, e...)") == "f(a, b, *d, c=2, **e)"
     end
 
     @testset "Multi-line" begin

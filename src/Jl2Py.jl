@@ -184,32 +184,48 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] == :Set ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
-            items = __jl2py(jl_expr.args[2:end])
-            return AST.fix_missing_locations(AST.Set(PyList(items)))
+            return AST.fix_missing_locations(AST.Set(PyList(__jl2py(jl_expr.args[2:end]))))
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
-            items = []
+            _keys = []
             values = []
             for arg in jl_expr.args[2:end]
                 if isa(arg, Expr) && arg.head == :...
-                    push!(items, nothing)
+                    push!(_keys, nothing)
                     push!(values, __jl2py(arg.args[1]))
                 else
-                    item, value = __parse_pair(arg)
-                    push!(items, item)
+                    key, value = __parse_pair(arg)
+                    push!(_keys, key)
                     push!(values, value)
                 end
             end
-            return AST.fix_missing_locations(AST.Dict(PyList(items), PyList(values)))
+            return AST.fix_missing_locations(AST.Dict(PyList(_keys), PyList(values)))
         else
-            # TODO: handle keyword arguments
             if isa(jl_expr.args[1], Symbol) && jl_expr.args[1] ∈ keys(BUILTIN_DICT)
                 func = AST.Name(BUILTIN_DICT[jl_expr.args[1]])
             else
                 func = __jl2py(jl_expr.args[1])
             end
-            parameters = __jl2py(jl_expr.args[2:end])
-            call = AST.Call(func, parameters, [])
+            parameters = []
+            keywords = []
+            for arg in jl_expr.args[2:end]
+                if isa(arg, Expr) && arg.head == :parameters
+                    for param in arg.args
+                        if param.head == :kw
+                            key = pystr(param.args[1])
+                            value = __jl2py(param.args[2])
+                            push!(keywords, AST.keyword(key, value))
+                        elseif param.head == :...
+                            value = __jl2py(param.args[1])
+                            push!(keywords, AST.keyword(nothing, value))
+                        end
+                    end
+                else
+                    push!(parameters, __jl2py(arg))
+                end
+            end
+
+            call = AST.Call(func, parameters, keywords)
             return topofblock ? AST.Expr(call) : call
         end
     elseif jl_expr.head == :comparison
