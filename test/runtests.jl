@@ -126,6 +126,13 @@ using Test
         @test jl2py("Dict{Number,Number}(1=>2, 3=>14)") == "{1: 2, 3: 14}" # Type info is discarded
     end
 
+    @testset "Expansion" begin
+        @test jl2py("(a...)") == "(*a)"
+        @test jl2py("[a..., b...]") == "[*a, *b]"
+        @test jl2py("Set(a..., b)") == "{*a, b}"
+        @test jl2py("Dict(a..., b)") == "{**a, b}"
+    end
+
     @testset "Assign" begin
         @test jl2py("a = 2") == "a = 2"
         @test jl2py("a = 2 + 3") == "a = 2 + 3"

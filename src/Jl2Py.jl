@@ -4,6 +4,12 @@ export jl2py
 
 using PythonCall
 
+const AST = PythonCall.pynew()
+const OP_DICT = Dict{Symbol,Py}()
+const OP_UDICT = Dict{Symbol,Py}()
+const TYPE_DICT = Dict{Symbol,String}()
+const BUILTIN_DICT = Dict{Symbol,String}()
+
 function __unaryop(jl_expr, op)
     operand = __jl2py(jl_expr.args[2])
     unaryop = AST.UnaryOp(op(), operand)
@@ -48,12 +54,6 @@ function __multiop(jl_expr, op)
     end
     return binop
 end
-
-const AST = PythonCall.pynew()
-const OP_DICT = Dict{Symbol,Py}()
-const OP_UDICT = Dict{Symbol,Py}()
-const TYPE_DICT = Dict{Symbol,String}()
-const BUILTIN_DICT = Dict{Symbol,String}()
 
 function __parse_arg(expr::Union{Symbol,Expr})
     if isa(expr, Symbol)
@@ -112,6 +112,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         __boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :tuple
         return AST.Tuple(__jl2py(jl_expr.args))
+    elseif jl_expr.head == :...
+        return AST.Starred(__jl2py(jl_expr.args[1]))
     elseif jl_expr.head ∈ [:if, :elseif]
         # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
         test = __jl2py(jl_expr.args[1])
@@ -189,9 +191,14 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             items = []
             values = []
             for arg in jl_expr.args[2:end]
-                item, value = __parse_pair(arg)
-                push!(items, item)
-                push!(values, value)
+                if isa(arg, Expr) && arg.head == :...
+                    push!(items, nothing)
+                    push!(values, __jl2py(arg.args[1]))
+                else
+                    item, value = __parse_pair(arg)
+                    push!(items, item)
+                    push!(values, value)
+                end
             end
             return AST.fix_missing_locations(AST.Dict(PyList(items), PyList(values)))
         else
