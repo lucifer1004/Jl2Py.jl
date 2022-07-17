@@ -102,6 +102,11 @@ using Test
         @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
     end
 
+    @testset "Dict" begin
+        @test jl2py("Dict{1=>2, 3=>14}") == "{1: 2, 3: 14}"
+        @test jl2py("Dict{Number,Number}{1=>2, 3=>14}") == "{1: 2, 3: 14}" # Type info is discarded
+    end
+
     @testset "Assign" begin
         @test jl2py("a = 2") == "a = 2"
         @test jl2py("a = 2 + 3") == "a = 2 + 3"
@@ -115,6 +120,16 @@ using Test
 
     @testset "Multi-line" begin
         @test jl2py("a = 2; b = 3") == "a = 2\nb = 3"
+        @test jl2py("""
+        begin
+            function f(x::Int64, y::Int64)
+                x + y
+            end
+        
+            a = f(3)
+            f(4)
+        end
+    """) == "def f(x: int, y: int):\n    return x + y\na = f(3)\nf(4)"
     end
 
     @testset "Function defintion" begin

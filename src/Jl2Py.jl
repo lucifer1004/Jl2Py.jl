@@ -105,6 +105,11 @@ function __parse_arg(expr::Expr)
     return AST.arg(pystr(expr.args[1]), AST.Name(pystr(TYPE_DICT[expr.args[2]])))
 end
 
+function __parse_pair(expr::Expr)
+    (expr.head == :call && expr.args[1] == :(=>)) || error("Invalid pair expr")
+    return __jl2py(expr.args[2]), __jl2py(expr.args[3])
+end
+
 function __jl2py(args::AbstractVector)
     return map(x -> isa(x, Vector) ? x[1] : x, map(__jl2py, args))
 end
@@ -117,7 +122,7 @@ function __jl2py(jl_symbol::Symbol)
     return AST.Name(pystr(jl_symbol))
 end
 
-function __jl2py(jl_expr::Expr)
+function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = []
         for expr in jl_expr.args
@@ -125,7 +130,7 @@ function __jl2py(jl_expr::Expr)
                 continue
             end
 
-            py_expr = __jl2py(expr)
+            py_expr = __jl2py(expr; topofblock=true)
             if isa(py_expr, Vector)
                 append!(py_exprs, py_expr)
             else
@@ -151,6 +156,17 @@ function __jl2py(jl_expr::Expr)
                                                           PyList(body), PyList(), PyList()))]
     elseif jl_expr.head ∈ [:(&&), :(||)]
         @__boolop(jl_expr, OP_DICT[jl_expr.head])
+    elseif jl_expr.head == :curly
+        if jl_expr.args[1] == :Dict || (jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
+            keys = []
+            values = []
+            for arg in jl_expr.args[2:end]
+                key, value = __parse_pair(arg)
+                push!(keys, key)
+                push!(values, value)
+            end
+            return [AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))]
+        end
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
@@ -182,7 +198,7 @@ function __jl2py(jl_expr::Expr)
             func = __jl2py(jl_expr.args[1])
             parameters = __jl2py(jl_expr.args[2:end])
             call = AST.Call(func, parameters, [])
-            return [call]
+            return topofblock ? [AST.Expr(call)] : [call]
         end
     elseif jl_expr.head == :comparison
         @__compareop_from_comparison(jl_expr)
