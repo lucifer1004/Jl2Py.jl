@@ -101,6 +101,23 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                                                          PyList(body), PyList(), PyList()))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
+    elseif jl_expr.head ∈ [:if, :elseif]
+        # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
+        test = __jl2py(jl_expr.args[1])
+        if isa(jl_expr.args[2], Expr) && jl_expr.args[2].head == :block
+            # AST.If
+            body = __jl2py(jl_expr.args[2])
+            orelse = length(jl_expr.args) == 3 ? __jl2py(jl_expr.args[3]) : nothing
+            if !isnothing(orelse) && !isa(orelse, Vector)
+                orelse = PyList([orelse])
+            end
+            return AST.If(test, body, orelse)
+        else
+            # AST.IfExp
+            body = __jl2py(jl_expr.args[2])
+            orelse = __jl2py(jl_expr.args[3])
+            return AST.IfExp(test, body, orelse)
+        end
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
@@ -160,6 +177,10 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         last_target, value = __jl2py(curr)
         push!(targets, last_target)
         return AST.fix_missing_locations(AST.Assign(targets, value))
+    elseif jl_expr.head ∈ [:+=, :-=, :*=, :/=, :÷=, :%=, :^=, :&=, :|=, :⊻=, :(<<=), :(>>=)]
+        target = __jl2py(jl_expr.args[1])
+        value = __jl2py(jl_expr.args[2])
+        return AST.fix_missing_locations(AST.AugAssign(target, OP_DICT[jl_expr.head](), value))
     elseif jl_expr.head == :vect
         listop = AST.List(__jl2py(jl_expr.args))
         return listop
@@ -210,6 +231,18 @@ function __init__()
     OP_DICT[:xor] = AST.BitXor
     OP_DICT[:(&&)] = AST.And
     OP_DICT[:(||)] = AST.Or
+    OP_DICT[:+=] = AST.Add
+    OP_DICT[:-=] = AST.Sub
+    OP_DICT[:*=] = AST.Mult
+    OP_DICT[:/=] = AST.Div
+    OP_DICT[:÷=] = AST.FloorDiv
+    OP_DICT[:%=] = AST.Mod
+    OP_DICT[:^=] = AST.Pow
+    OP_DICT[:(<<=)] = AST.LShift
+    OP_DICT[:(>>=)] = AST.RShift
+    OP_DICT[:&=] = AST.BitAnd
+    OP_DICT[:|=] = AST.BitOr
+    OP_DICT[:⊻=] = AST.BitXor
 
     TYPE_DICT[:Float32] = "float"
     TYPE_DICT[:Float64] = "float"

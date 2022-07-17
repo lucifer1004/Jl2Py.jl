@@ -91,6 +91,10 @@ using Test
         @test jl2py("3 > 2 != 3 == 3") == "3 > 2 != 3 == 3"
     end
 
+    @testset "Ternary operator" begin
+        @test jl2py("x > 2 ? 1 : 0") == "1 if x > 2 else 0"
+    end
+
     @testset "Ranges" begin
         @test jl2py("1:10") == "range(1, 10)"
         @test jl2py("1:2:10") == "range(1, 10, 2)"
@@ -117,6 +121,28 @@ using Test
         @test jl2py("a = 2 + 3") == "a = 2 + 3"
         @test jl2py("a = b = 2") == "a = b = 2"
         @test jl2py("a = b = c = 23 + 3") == "a = b = c = 23 + 3"
+    end
+
+    @testset "AugAssign" begin
+        @test jl2py("a += 2") == "a += 2"
+        @test jl2py("a -= 2 + 3") == "a -= 2 + 3"
+        @test jl2py("a *= 2") == "a *= 2"
+        @test jl2py("a /= 2") == "a /= 2"
+        @test jl2py("a ÷= 2") == "a //= 2"
+        @test jl2py("a %= 2") == "a %= 2"
+        @test jl2py("a ^= 2") == "a **= 2"
+        @test jl2py("a <<= 2") == "a <<= 2"
+        @test jl2py("a >>= 2") == "a >>= 2"
+        @test jl2py("a &= 2") == "a &= 2"
+        @test jl2py("a |= 2") == "a |= 2"
+        @test jl2py("a ⊻= 2") == "a ^= 2"
+    end
+
+    @testset "If statement" begin
+        @test jl2py("if x > 3 x += 2 end") == "if x > 3:\n    x += 2"
+        @test jl2py("if x > 3 x += 2 else x -= 1 end") == "if x > 3:\n    x += 2\nelse:\n    x -= 1"
+        @test jl2py("if x > 3 x += 2 elseif x < 0 x -= 1 end") ==
+              "if x > 3:\n    x += 2\nelif x < 0:\n    x -= 1"
     end
 
     @testset "Function call" begin
