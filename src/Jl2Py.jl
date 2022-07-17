@@ -6,71 +6,47 @@ using PythonCall
 
 function __unaryop(jl_expr, op)
     operand = __jl2py(jl_expr.args[2])
-    if isa(operand, Vector)
-        operand = operand[1]
-    end
     unaryop = AST.UnaryOp(op(), operand)
-    return [unaryop]
+    return unaryop
 end
 
 function __binop(jl_expr, op)
     left = __jl2py(jl_expr.args[2])
-    if isa(left, Vector)
-        left = left[1]
-    end
     right = __jl2py(jl_expr.args[3])
-    if isa(right, Vector)
-        right = right[1]
-    end
     binop = AST.BinOp(left, op(), right)
-    return [binop]
+    return binop
 end
 
 function __boolop(jl_expr, op)
     left = __jl2py(jl_expr.args[1])
-    if isa(left, Vector)
-        left = left[1]
-    end
     right = __jl2py(jl_expr.args[2])
-    if isa(right, Vector)
-        right = right[1]
-    end
     boolop = AST.BoolOp(op(), [left, right])
-    return [boolop]
+    return boolop
 end
 
 function __compareop_from_comparison(jl_expr)
     elts = __jl2py(jl_expr.args[1:2:end])
     ops = map(x -> OP_DICT[x](), jl_expr.args[2:2:end])
     compareop = AST.Compare(elts[1], ops, elts[2:end])
-    return [compareop]
+    return compareop
 end
 
 function __compareop_from_call(jl_expr, op)
     elts = __jl2py(jl_expr.args[2:end])
     compareop = AST.Compare(elts[1], [op()], elts[2:end])
-    return [compareop]
+    return compareop
 end
 
 function __multiop(jl_expr, op)
     left = __jl2py(jl_expr.args[2])
-    if isa(left, Vector)
-        left = left[1]
-    end
     right = __jl2py(jl_expr.args[3])
-    if isa(right, Vector)
-        right = right[1]
-    end
     binop = AST.BinOp(left, op(), right)
     argcnt = length(jl_expr.args)
     for i in 4:argcnt
         right = __jl2py(jl_expr.args[i])
-        if isa(right, Vector)
-            right = right[1]
-        end
         binop = AST.BinOp(binop, op(), right)
     end
-    return [binop]
+    return binop
 end
 
 const AST = PythonCall.pynew()
@@ -106,21 +82,8 @@ end
 
 function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
-        py_exprs = []
-        for expr in jl_expr.args
-            if isa(expr, LineNumberNode)
-                continue
-            end
-
-            py_expr = __jl2py(expr; topofblock=true)
-            if isa(py_expr, Vector)
-                append!(py_exprs, py_expr)
-            else
-                push!(py_exprs, AST.Expr(py_expr))
-            end
-        end
-
-        return py_exprs
+        py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
+        return PyList(py_exprs)
     elseif jl_expr.head == :function
         name = jl_expr.args[1].args[1]
         args = map(__parse_arg, jl_expr.args[1].args[2:end])
@@ -132,10 +95,10 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         end
 
         # TODO: handle various arguments
-        return [AST.fix_missing_locations(AST.FunctionDef(pystr(name),
-                                                          AST.arguments(; args=PyList(args), posonlyargs=PyList(),
-                                                                        kwonlyargs=PyList(), defaults=PyList()),
-                                                          PyList(body), PyList(), PyList()))]
+        return AST.fix_missing_locations(AST.FunctionDef(pystr(name),
+                                                         AST.arguments(; args=PyList(args), posonlyargs=PyList(),
+                                                                       kwonlyargs=PyList(), defaults=PyList()),
+                                                         PyList(body), PyList(), PyList()))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :call
@@ -156,9 +119,9 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         elseif jl_expr.args[1] == :(:)
             args = __jl2py(jl_expr.args[2:end])
             if length(args) == 2
-                return [AST.Call(AST.Name("range"), args, [])]
+                return AST.Call(AST.Name("range"), args, [])
             elseif length(args) == 3
-                return [AST.Call(AST.Name("range"), [args[1], args[3], args[2]], [])]
+                return AST.Call(AST.Name("range"), [args[1], args[3], args[2]], [])
             end
         elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
@@ -167,7 +130,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         elseif jl_expr.args[1] == :Set ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
             keys = __jl2py(jl_expr.args[2:end])
-            return [AST.fix_missing_locations(AST.Set(PyList(keys)))]
+            return AST.fix_missing_locations(AST.Set(PyList(keys)))
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
             keys = []
@@ -177,13 +140,13 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                 push!(keys, key)
                 push!(values, value)
             end
-            return [AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))]
+            return AST.fix_missing_locations(AST.Dict(PyList(keys), PyList(values)))
         else
             # TODO: handle keyword arguments
             func = __jl2py(jl_expr.args[1])
             parameters = __jl2py(jl_expr.args[2:end])
             call = AST.Call(func, parameters, [])
-            return topofblock ? [AST.Expr(call)] : [call]
+            return topofblock ? AST.Expr(call) : call
         end
     elseif jl_expr.head == :comparison
         __compareop_from_comparison(jl_expr)
@@ -196,26 +159,17 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         end
         last_target, value = __jl2py(curr)
         push!(targets, last_target)
-        return [AST.fix_missing_locations(AST.Assign(targets, value))]
+        return AST.fix_missing_locations(AST.Assign(targets, value))
     elseif jl_expr.head == :vect
         listop = AST.List(__jl2py(jl_expr.args))
-        return [listop]
-    else
-        return []
+        return listop
     end
 end
 
 function jl2py(jl_str::String)
     jl_ast = Meta.parse(jl_str)
-    py_body = PyList()
-
-    if isa(jl_ast, Union{Number,String,Symbol})
-        push!(py_body, __jl2py(jl_ast))
-    elseif isa(jl_ast, Expr)
-        append!(py_body, __jl2py(jl_ast))
-    end
-
-    _module = AST.Module(py_body, [])
+    py_ast = __jl2py(jl_ast)
+    _module = AST.Module(PyList([py_ast]), [])
     py_str = AST.unparse(_module)
     return string(py_str)
 end
