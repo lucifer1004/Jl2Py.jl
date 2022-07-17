@@ -219,5 +219,7 @@ using Test
               "def f(*b, x: float=2, y):\n    return x + y"
         @test jl2py("function f(a,b,c...;x::Float32=2, y) x + y end") ==
               "def f(a, b, /, *c, x: float=2, y):\n    return x + y"
+        @test jl2py("function f(a,b,c...;x::Float32=2, y, z...) x + y end") ==
+              "def f(a, b, /, *c, x: float=2, y, **z):\n    return x + y"
     end
 end
