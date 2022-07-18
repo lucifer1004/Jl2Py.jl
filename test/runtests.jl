@@ -142,6 +142,10 @@ using Test
         @test jl2py("a = b = c = 23 + 3") == "a = b = c = 23 + 3"
     end
 
+    @testset "AnnAssign" begin
+        @test jl2py("a::Int = 2") == "(a): int = 2"
+    end
+
     @testset "AugAssign" begin
         @test jl2py("a += 2") == "a += 2"
         @test jl2py("a -= 2 + 3") == "a -= 2 + 3"

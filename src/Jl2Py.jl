@@ -294,6 +294,15 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     elseif jl_expr.head == :comparison
         __compareop_from_comparison(jl_expr)
     elseif jl_expr.head == :(=)
+        # AnnAssign
+        if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::)
+            target = __jl2py(jl_expr.args[1].args[1])
+            annotation = AST.Name(TYPE_DICT[jl_expr.args[1].args[2]])
+            value = __jl2py(jl_expr.args[2])
+            return AST.fix_missing_locations(AST.AnnAssign(target, annotation, value, nothing))
+        end
+
+        # Assign
         targets = PyList()
         curr = jl_expr.args
         while isa(curr[2], Expr) && curr[2].head == :(=)
