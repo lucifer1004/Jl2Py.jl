@@ -122,7 +122,8 @@ function __jl2py(jl_constant::Union{Number,String}; topofblock::Bool=false)
 end
 
 function __jl2py(jl_symbol::Symbol; topofblock::Bool=false)
-    return topofblock ? AST.Expr(AST.Name(pystr(jl_symbol))) : AST.Name(pystr(jl_symbol))
+    name = jl_symbol == :nothing ? AST.Constant(nothing) : AST.Name(pystr(jl_symbol))
+    return topofblock ? AST.Expr(name) : name
 end
 
 function __jl2py(jl_expr::Expr; topofblock::Bool=false)
@@ -413,6 +414,8 @@ function __init__()
     TYPE_DICT[:Dict] = "Dict"
     TYPE_DICT[:Tuple] = "Tuple"
     TYPE_DICT[:Pair] = "Tuple"
+    TYPE_DICT[:Union] = "Union"
+    TYPE_DICT[:Nothing] = "None"
 
     BUILTIN_DICT[:length] = "len"
     BUILTIN_DICT[:sort] = "sorted"

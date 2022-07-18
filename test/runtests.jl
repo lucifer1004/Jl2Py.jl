@@ -8,6 +8,7 @@ using Test
         @test jl2py("\"hello\"") == "'hello'"
         @test jl2py("false") == "False"
         @test jl2py("true") == "True"
+        @test jl2py("nothing") == "None"
         @test jl2py("foo") == "foo"
     end
 
@@ -235,9 +236,12 @@ using Test
     end
 
     @testset "Type annotations" begin
+        @test jl2py("a::Nothing = nothing") == "(a): None = None"
         @test jl2py("a::Vector{Int} = 2") == "(a): List[int] = 2"
         @test jl2py("a::Set{Int} = Set([2, 3])") == "(a): Set[int] = set([2, 3])"
         @test jl2py("a::Dict{Int, Pair{Int, Tuple{String, Int, Char}}} = Dict()") ==
               "(a): Dict[int, Tuple[int, Tuple[str, int, str]]] = {}"
+        @test jl2py("a::Union{Int, Nothing} = nothing") ==
+              "(a): Union[int, None] = None"
     end
 end
