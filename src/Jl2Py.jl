@@ -113,6 +113,18 @@ function __parse_type(typ::Union{Symbol,Expr})
     end
 end
 
+function __parse_generator(args::AbstractVector)
+    return PyList(vcat(map(args) do arg
+                           if arg.head == :(=)
+                               target = __jl2py(arg.args[1])
+                               iter = __jl2py(arg.args[2])
+                               [AST.comprehension(target, iter, PyList(); is_async=false)]
+                           else
+                               __jl2py(arg)
+                           end
+                       end...))
+end
+
 function __jl2py(args::AbstractVector)
     return map(__jl2py, args)
 end
@@ -126,7 +138,7 @@ function __jl2py(jl_symbol::Symbol; topofblock::Bool=false)
     return topofblock ? AST.Expr(name) : name
 end
 
-function __jl2py(jl_expr::Expr; topofblock::Bool=false)
+function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
         return PyList(py_exprs)
@@ -232,12 +244,38 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         return AST.Return(value)
     elseif jl_expr.head == :ref
         value = __jl2py(jl_expr.args[1])
-        if isa(jl_expr.args[2], Expr) && jl_expr.args[2].args[1] == :(:)
-            slice = AST.Slice(__parse_range(jl_expr.args[2].args[2:end])...)
-        else
-            slice = __jl2py(jl_expr.args[2])
+        slices = map(jl_expr.args[2:end]) do arg
+            if isa(arg, Expr) && arg.args[1] == :(:)
+                slice = AST.Slice(__parse_range(arg.args[2:end])...)
+            else
+                slice = __jl2py(arg)
+            end
         end
+        slice = length(slices) == 1 ? slices[1] : AST.Tuple(PyList(slices))
         return AST.Subscript(value, slice)
+    elseif jl_expr.head == :comprehension
+        return AST.ListComp(__jl2py(jl_expr.args[1])...)
+    elseif jl_expr.head == :generator
+        if isflatten
+            elt, extra_gens = __jl2py(jl_expr.args[1])
+            gens = __parse_generator(jl_expr.args[2:end])
+            append!(gens, extra_gens)
+        else
+            elt = __jl2py(jl_expr.args[1])
+            gens = __parse_generator(jl_expr.args[2:end])
+        end
+        return elt, gens
+    elseif jl_expr.head == :filter
+        filter = __jl2py(jl_expr.args[1])
+        map(2:length(jl_expr.args)) do i
+            arg = jl_expr.args[i]
+            target = __jl2py(arg.args[1])
+            iter = __jl2py(arg.args[2])
+            return i == length(jl_expr.args) ? AST.comprehension(target, iter, PyList([filter]); is_async=false) :
+                   AST.comprehension(target, iter, PyList(); is_async=false)
+        end
+    elseif jl_expr.head == :flatten
+        return __jl2py(jl_expr.args[1]; isflatten=true)
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2

@@ -182,7 +182,24 @@ using Test
         @test jl2py("a[1]") == "a[1]"
         @test jl2py("a[1:5]") == "a[1:6]"
         @test jl2py("a[1:2:5]") == "a[1:6:2]"
+        @test jl2py("a[1,2,3]") == "a[1, 2, 3]"
+        @test jl2py("a[1,2:5,3]") == "a[1, 2:6, 3]"
+        @test jl2py("a[:,1,2:4]") == "a[:, 1, 2:5]"
         @test jl2py("d[\"a\"]") == "d['a']"
+    end
+
+    @testset "List Comprehension" begin
+        @test jl2py("[x for x in 1:5]") == "[x for x in range(1, 6)]"
+        @test jl2py("[x for x in 1:5 if x % 2 == 0]") ==
+              "[x for x in range(1, 6) if x % 2 == 0]"
+        @test jl2py("[(x, y) for (x, y) in zip(1:5, 5:-1:1)]") ==
+              "[(x, y) for (x, y) in zip(range(1, 6), range(5, 0, -1))]"
+        @test jl2py("[x + 2 for x in 1:5 if x > 0]") ==
+              "[x + 2 for x in range(1, 6) if x > 0]"
+        @test jl2py("[x for x in 1:5 if x > 4 for y in 1:5 if y >4]") ==
+              "[x for x in range(1, 6) if x > 4 for y in range(1, 6) if y > 4]"
+        @test jl2py("[1 for y in 1:5, z in 1:6 if y > z]") ==
+              "[1 for y in range(1, 6) for z in range(1, 7) if y > z]"
     end
 
     @testset "Function call (and builtins)" begin
