@@ -188,6 +188,11 @@ using Test
         @test jl2py("d[\"a\"]") == "d['a']"
     end
 
+    @testset "GeneratorExp" begin
+        @test jl2py("sum(x for x in 1:100)") == "sum((x for x in range(1, 101)))"
+        @test jl2py("Set(x for x in 1:100)") == "set((x for x in range(1, 101)))"
+    end
+
     @testset "List Comprehension" begin
         @test jl2py("[x for x in 1:5]") == "[x for x in range(1, 6)]"
         @test jl2py("[x for x in 1:5 if x % 2 == 0]") ==
@@ -200,6 +205,11 @@ using Test
               "[x for x in range(1, 6) if x > 4 for y in range(1, 6) if y > 4]"
         @test jl2py("[1 for y in 1:5, z in 1:6 if y > z]") ==
               "[1 for y in range(1, 6) for z in range(1, 7) if y > z]"
+
+        @testset "GeneratorExp within Generator" begin
+            @test jl2py("[x for x in 1:5 if x > 4 for y in 1:5 if y >4 for z in 1:sum(x for x in 1:5)]") ==
+                  "[x for x in range(1, 6) if x > 4 for y in range(1, 6) if y > 4 for z in range(1, sum((x for x in range(1, 6))) + 1)]"
+        end
     end
 
     @testset "Function call (and builtins)" begin

@@ -138,7 +138,7 @@ function __jl2py(jl_symbol::Symbol; topofblock::Bool=false)
     return topofblock ? AST.Expr(name) : name
 end
 
-function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false)
+function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, iscomprehension::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
         return PyList(py_exprs)
@@ -254,17 +254,17 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false)
         slice = length(slices) == 1 ? slices[1] : AST.Tuple(PyList(slices))
         return AST.Subscript(value, slice)
     elseif jl_expr.head == :comprehension
-        return AST.ListComp(__jl2py(jl_expr.args[1])...)
+        return AST.ListComp(__jl2py(jl_expr.args[1]; iscomprehension=true)...)
     elseif jl_expr.head == :generator
         if isflatten
-            elt, extra_gens = __jl2py(jl_expr.args[1])
+            elt, extra_gens = __jl2py(jl_expr.args[1]; iscomprehension=iscomprehension)
             gens = __parse_generator(jl_expr.args[2:end])
             append!(gens, extra_gens)
         else
             elt = __jl2py(jl_expr.args[1])
             gens = __parse_generator(jl_expr.args[2:end])
         end
-        return elt, gens
+        return iscomprehension ? (elt, gens) : AST.GeneratorExp(elt, gens)
     elseif jl_expr.head == :filter
         filter = __jl2py(jl_expr.args[1])
         map(2:length(jl_expr.args)) do i
@@ -275,7 +275,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false)
                    AST.comprehension(target, iter, PyList(); is_async=false)
         end
     elseif jl_expr.head == :flatten
-        return __jl2py(jl_expr.args[1]; isflatten=true)
+        return __jl2py(jl_expr.args[1]; isflatten=true, iscomprehension=iscomprehension)
     elseif jl_expr.head == :call
         if jl_expr.args[1] == :+
             if length(jl_expr.args) == 2
