@@ -190,6 +190,7 @@ using Test
         @test jl2py("println(2)") == "print(2)"
         @test jl2py("length(a)") == "len(a)"
         @test jl2py("sort([2, 3, 4])") == "sorted([2, 3, 4])"
+        @test jl2py("sort!([1, 5, 3])") == "sort_inplace([1, 5, 3])" # The trailing "!" is replaced by "_inplace"
         @test jl2py("f(a)") == "f(a)"
         @test jl2py("f(a, b)") == "f(a, b)"
         @test jl2py("f(a, b; c = 2)") == "f(a, b, c=2)"
@@ -243,5 +244,7 @@ using Test
               "(a): Dict[int, Tuple[int, Tuple[str, int, str]]] = {}"
         @test jl2py("a::Union{Int, Nothing} = nothing") ==
               "(a): Union[int, None] = None"
+        @test jl2py("a::ListNode = ListNode()") ==
+              "(a): ListNode = ListNode()" # Unknown types are not changed
     end
 end

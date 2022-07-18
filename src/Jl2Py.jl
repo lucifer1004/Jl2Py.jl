@@ -101,7 +101,7 @@ end
 
 function __parse_type(typ::Union{Symbol,Expr})
     if isa(typ, Symbol)
-        return AST.Name(TYPE_DICT[typ])
+        return AST.Name(get(TYPE_DICT, typ, pystr(typ)))
     else
         typ.head == :curly || error("Invalid type expr")
         if length(typ.args) == 2
@@ -278,8 +278,14 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             end
             return AST.fix_missing_locations(AST.Dict(PyList(_keys), PyList(values)))
         else
-            if isa(jl_expr.args[1], Symbol) && jl_expr.args[1] ∈ keys(BUILTIN_DICT)
-                func = AST.Name(BUILTIN_DICT[jl_expr.args[1]])
+            if isa(jl_expr.args[1], Symbol)
+                if jl_expr.args[1] ∈ keys(BUILTIN_DICT)
+                    func = AST.Name(BUILTIN_DICT[jl_expr.args[1]])
+                elseif string(jl_expr.args[1])[end] != '!'
+                    func = AST.Name(string(jl_expr.args[1]))
+                else
+                    func = AST.Name(string(jl_expr.args[1])[1:(end - 1)] * "_inplace")
+                end
             else
                 func = __jl2py(jl_expr.args[1])
             end
