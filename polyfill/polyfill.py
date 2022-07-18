@@ -47,13 +47,3 @@ def delete_inplace(x, k):
 def union_inplace(x: set, y: set):
     x = x | y
     return x
-
-
-def two_sum(nums: List[int], target: int, /) -> Union[None, Tuple[int, int]]:
-    seen = {}
-    for (i, n) in enumerate(nums):
-        m = target - n
-        if haskey(seen, m):
-            return (seen[m], i)
-        else:
-            seen[n] = i
