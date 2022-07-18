@@ -15,3 +15,45 @@ def iszero(x) -> bool:
 
 def divrem(x, y) -> Tuple:
     return x // y, x % y
+
+
+def sort_inplace(x: list, rev: bool = False):
+    x.sort(reverse=rev)
+    return x
+
+
+def push_inplace(x: Union[list, set, dict], *y):
+    if isinstance(x, list):
+        for yi in y:
+            x.append(yi)
+    elif isinstance(x, set):
+        for yi in y:
+            x.add(yi)
+    elif isinstance(x, dict):
+        for yi in y:
+            assert(isinstance(yi, tuple) and len(yi) == 2)
+            x[yi[0]] = yi[1]
+    return x
+
+
+def delete_inplace(x, k):
+    if isinstance(x, set) and k in x:
+        x.remove(k)
+    elif isinstance(x, dict) and k in x:
+        del x[k]
+    return x
+
+
+def union_inplace(x: set, y: set):
+    x = x | y
+    return x
+
+
+def two_sum(nums: List[int], target: int, /) -> Union[None, Tuple[int, int]]:
+    seen = {}
+    for (i, n) in enumerate(nums):
+        m = target - n
+        if haskey(seen, m):
+            return (seen[m], i)
+        else:
+            seen[n] = i

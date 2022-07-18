@@ -191,6 +191,8 @@ using Test
     @testset "GeneratorExp" begin
         @test jl2py("sum(x for x in 1:100)") == "sum((x for x in range(1, 101)))"
         @test jl2py("Set(x for x in 1:100)") == "set((x for x in range(1, 101)))"
+        @test jl2py("Dict(x=>y for (x, y) in zip(1:5, 1:6))") ==
+              "dict(((x, y) for (x, y) in zip(range(1, 6), range(1, 7))))"
     end
 
     @testset "List Comprehension" begin
@@ -225,6 +227,7 @@ using Test
         @test jl2py("f(a, b, d...; c = 2, e...)") == "f(a, b, *d, c=2, **e)"
         @test jl2py("f(g(x))") == "f(g(x))"
         @test jl2py("f(x)(y)") == "f(x)(y)"
+        @test jl2py("Set{Int}([1,2,3])") == "set([1, 2, 3])"
     end
 
     @testset "Multi-line" begin
@@ -275,5 +278,11 @@ using Test
               "(a): Union[int, None] = None"
         @test jl2py("a::ListNode = ListNode()") ==
               "(a): ListNode = ListNode()" # Unknown types are not changed
+    end
+
+    @testset "Apply Polyfill" begin
+        polyfill = read(joinpath(@__DIR__, "..", "polyfill", "polyfill.py"), String)
+
+        @test jl2py("print(1)"; apply_polyfill=true) == polyfill * "\n" * "print(1)"
     end
 end

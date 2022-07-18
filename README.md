@@ -12,7 +12,6 @@ Conversion results of [LeetCode.jl - 1. Two Sum](https://github.com/JuliaCN/Leet
 ```python
 def two_sum(nums: List[int], target: int, /) -> Union[None, Tuple[int, int]]:
     seen = {}
-    x = 2
     for (i, n) in enumerate(nums):
         m = target - n
         if haskey(seen, m):

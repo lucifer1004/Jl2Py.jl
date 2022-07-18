@@ -125,9 +125,7 @@ function __parse_generator(args::AbstractVector)
                        end...))
 end
 
-function __jl2py(args::AbstractVector)
-    return map(__jl2py, args)
-end
+__jl2py(args::AbstractVector) = map(__jl2py, args)
 
 function __jl2py(jl_constant::Union{Number,String}; topofblock::Bool=false)
     return topofblock ? AST.Expr(AST.Constant(jl_constant)) : AST.Constant(jl_constant)
@@ -302,6 +300,13 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
             return AST.Tuple(__jl2py(jl_expr.args[2:end]))
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
+            # Handle generator separately
+            if length(jl_expr.args) == 2 && jl_expr.args[2].head == :generator
+                generator = __jl2py(jl_expr.args[2])
+                dict_call = AST.Call(AST.Name("dict"), PyList([generator]), PyList())
+                return topofblock ? AST.Expr(dict_call) : dict_call
+            end
+
             _keys = []
             values = []
             for arg in jl_expr.args[2:end]
@@ -316,13 +321,15 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
             end
             return AST.fix_missing_locations(AST.Dict(PyList(_keys), PyList(values)))
         else
-            if isa(jl_expr.args[1], Symbol)
-                if jl_expr.args[1] ∈ keys(BUILTIN_DICT)
-                    func = AST.Name(BUILTIN_DICT[jl_expr.args[1]])
+            if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :curly
+                # We discard the curly braces trailing a function call
+                arg = isa(jl_expr.args[1], Symbol) ? jl_expr.args[1] : jl_expr.args[1].args[1]
+                if arg ∈ keys(BUILTIN_DICT)
+                    func = AST.Name(BUILTIN_DICT[arg])
                 elseif string(jl_expr.args[1])[end] != '!'
-                    func = AST.Name(string(jl_expr.args[1]))
+                    func = AST.Name(string(arg))
                 else
-                    func = AST.Name(string(jl_expr.args[1])[1:(end - 1)] * "_inplace")
+                    func = AST.Name(string(arg)[1:(end - 1)] * "_inplace")
                 end
             else
                 func = __jl2py(jl_expr.args[1])
@@ -381,9 +388,18 @@ end
 
 function jl2py(jl_str::String; apply_polyfill::Bool=false)
     jl_ast = Meta.parse(jl_str)
+    if isnothing(jl_ast)
+        return ""
+    end
     py_ast = __jl2py(jl_ast)
     _module = AST.Module(PyList([py_ast]), [])
     py_str = AST.unparse(_module)
+
+    if apply_polyfill
+        polyfill = read(joinpath(@__DIR__, "..", "polyfill", "polyfill.py"), String)
+        return polyfill * "\n" * string(py_str)
+    end
+
     return string(py_str)
 end
 
