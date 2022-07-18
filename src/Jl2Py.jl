@@ -95,12 +95,12 @@ function __jl2py(args::AbstractVector)
     return map(__jl2py, args)
 end
 
-function __jl2py(jl_constant::Union{Number,String})
-    return AST.Constant(jl_constant)
+function __jl2py(jl_constant::Union{Number,String}; topofblock::Bool=false)
+    return topofblock ? AST.Expr(AST.Constant(jl_constant)) : AST.Constant(jl_constant)
 end
 
-function __jl2py(jl_symbol::Symbol)
-    return AST.Name(pystr(jl_symbol))
+function __jl2py(jl_symbol::Symbol; topofblock::Bool=false)
+    return topofblock ? AST.Expr(AST.Name(pystr(jl_symbol))) : AST.Name(pystr(jl_symbol))
 end
 
 function __jl2py(jl_expr::Expr; topofblock::Bool=false)
@@ -108,14 +108,25 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
         return PyList(py_exprs)
     elseif jl_expr.head == :function
-        name = jl_expr.args[1].args[1]
         posonlyargs = []
         defaults = []
         kwonlyargs = []
         kw_defaults = []
         kwarg = nothing
         vararg = nothing
-        for arg in jl_expr.args[1].args[2:end]
+        returns = nothing
+
+        if jl_expr.args[1].head == :call
+            name = jl_expr.args[1].args[1]
+            params = jl_expr.args[1].args[2:end]
+        else
+            jl_expr.args[1].head == :(::) || error("Invalid function defintion")
+            returns = AST.Name(TYPE_DICT[jl_expr.args[1].args[2]])
+            name = jl_expr.args[1].args[1].args[1]
+            params = jl_expr.args[1].args[1].args[2:end]
+        end
+
+        for arg in params
             if isa(arg, Symbol) || arg.head == :(::)
                 push!(posonlyargs, __parse_arg(arg))
             elseif arg.head == :kw
@@ -159,8 +170,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                                                                        kwonlyargs=PyList(kwonlyargs),
                                                                        defaults=PyList(defaults),
                                                                        kw_defaults=PyList(kw_defaults),
-                                                                       kwarg=kwarg, vararg=vararg), PyList(body),
-                                                         PyList(), PyList()))
+                                                                       kwarg=kwarg, vararg=vararg),
+                                                         PyList(body), PyList(); returns=returns))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
     elseif jl_expr.head == :tuple
