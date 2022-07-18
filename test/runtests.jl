@@ -196,6 +196,8 @@ using Test
         @test jl2py("f(a, b; c = 2)") == "f(a, b, c=2)"
         @test jl2py("f(a, b; kw...)") == "f(a, b, **kw)"
         @test jl2py("f(a, b, d...; c = 2, e...)") == "f(a, b, *d, c=2, **e)"
+        @test jl2py("f(g(x))") == "f(g(x))"
+        @test jl2py("f(x)(y)") == "f(x)(y)"
     end
 
     @testset "Multi-line" begin
