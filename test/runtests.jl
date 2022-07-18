@@ -2,6 +2,11 @@ using Jl2Py
 using Test
 
 @testset "Jl2Py.jl" begin
+    @testset "Empty" begin
+        @test jl2py("") == ""
+        @test jl2py("#comment") == ""
+    end
+
     @testset "Literal constants" begin
         @test jl2py("2") == "2"
         @test jl2py("2.0") == "2.0"
