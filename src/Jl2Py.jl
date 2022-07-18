@@ -59,7 +59,7 @@ function __parse_arg(arg::Union{Symbol,Expr})
     if isa(arg, Symbol)
         return AST.arg(pystr(arg))
     elseif arg.head == :(::)
-        return AST.arg(pystr(arg.args[1]), AST.Name(pystr(TYPE_DICT[arg.args[2]])))
+        return AST.arg(pystr(arg.args[1]), __parse_type(arg.args[2]))
     end
 end
 
@@ -99,6 +99,20 @@ function __parse_range(args::AbstractVector)
     end
 end
 
+function __parse_type(typ::Union{Symbol,Expr})
+    if isa(typ, Symbol)
+        return AST.Name(TYPE_DICT[typ])
+    else
+        typ.head == :curly || error("Invalid type expr")
+        if length(typ.args) == 2
+            slice = __parse_type(typ.args[2])
+        else
+            slice = AST.Tuple(map(__parse_type, typ.args[2:end]))
+        end
+        return AST.Subscript(__parse_type(typ.args[1]), slice)
+    end
+end
+
 function __jl2py(args::AbstractVector)
     return map(__jl2py, args)
 end
@@ -129,7 +143,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             params = jl_expr.args[1].args[2:end]
         else
             jl_expr.args[1].head == :(::) || error("Invalid function defintion")
-            returns = AST.Name(TYPE_DICT[jl_expr.args[1].args[2]])
+            returns = __parse_type(jl_expr.args[1].args[2])
             name = jl_expr.args[1].args[1].args[1]
             params = jl_expr.args[1].args[1].args[2:end]
         end
@@ -245,9 +259,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=, :∈, :∉, :in]
             __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] == :Set ||
-               (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Set)
-            return AST.fix_missing_locations(AST.Set(PyList(__jl2py(jl_expr.args[2:end]))))
+        elseif jl_expr.args[1] == :(=>)
+            return AST.Tuple(__jl2py(jl_expr.args[2:end]))
         elseif jl_expr.args[1] == :Dict ||
                (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
             _keys = []
@@ -297,7 +310,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         # AnnAssign
         if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::)
             target = __jl2py(jl_expr.args[1].args[1])
-            annotation = AST.Name(TYPE_DICT[jl_expr.args[1].args[2]])
+            annotation = __parse_type(jl_expr.args[1].args[2])
             value = __jl2py(jl_expr.args[2])
             return AST.fix_missing_locations(AST.AnnAssign(target, annotation, value, nothing))
         end
@@ -321,7 +334,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     end
 end
 
-function jl2py(jl_str::String)
+function jl2py(jl_str::String; apply_polyfill::Bool=false)
     jl_ast = Meta.parse(jl_str)
     py_ast = __jl2py(jl_ast)
     _module = AST.Module(PyList([py_ast]), [])
@@ -395,11 +408,17 @@ function __init__()
     TYPE_DICT[:Bool] = "bool"
     TYPE_DICT[:Char] = "str"
     TYPE_DICT[:String] = "str"
+    TYPE_DICT[:Vector] = "List"
+    TYPE_DICT[:Set] = "Set"
+    TYPE_DICT[:Dict] = "Dict"
+    TYPE_DICT[:Tuple] = "Tuple"
+    TYPE_DICT[:Pair] = "Tuple"
 
     BUILTIN_DICT[:length] = "len"
     BUILTIN_DICT[:sort] = "sorted"
     BUILTIN_DICT[:print] = "print"
     BUILTIN_DICT[:println] = "print"
+    BUILTIN_DICT[:Set] = "set"
 
     return
 end

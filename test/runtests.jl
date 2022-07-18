@@ -111,16 +111,17 @@ using Test
         @test jl2py("[1, 2, [3, 4], []]") == "[1, 2, [3, 4], []]"
     end
 
+    @testset "Pair" begin
+        @test jl2py("1 => 2") == "(1, 2)"
+        @test jl2py("a => b") == "(a, b)"
+        @test jl2py("a => b => c") == "(a, (b, c))"
+    end
+
     @testset "Tuple" begin
         @test jl2py("(1,)") == "(1,)"
         @test jl2py("(1, 2, 3)") == "(1, 2, 3)"
         @test jl2py("(1, 2, 3,)") == "(1, 2, 3)"
         @test jl2py("(a, a + b, c)") == "(a, a + b, c)"
-    end
-
-    @testset "Set" begin
-        @test jl2py("Set(1, 2, 3)") == "{1, 2, 3}"
-        @test jl2py("Set{Number}(1, 2, 3)") == "{1, 2, 3}"
     end
 
     @testset "Dict" begin
@@ -131,7 +132,6 @@ using Test
     @testset "Expansion" begin
         @test jl2py("(a...,)") == "(*a,)"
         @test jl2py("[a..., b...]") == "[*a, *b]"
-        @test jl2py("Set(a..., b)") == "{*a, b}"
         @test jl2py("Dict(a..., b => c)") == "{**a, b: c}"
     end
 
@@ -232,5 +232,12 @@ using Test
               "def f(a, b, /, *c, x: float=2, y, **z):\n    return x + y"
         @test jl2py("function f() for i in 1:10 print(i) end end") ==
               "def f():\n    for i in range(1, 11):\n        print(i)"
+    end
+
+    @testset "Type annotations" begin
+        @test jl2py("a::Vector{Int} = 2") == "(a): List[int] = 2"
+        @test jl2py("a::Set{Int} = Set([2, 3])") == "(a): Set[int] = set([2, 3])"
+        @test jl2py("a::Dict{Int, Pair{Int, Tuple{String, Int, Char}}} = Dict()") ==
+              "(a): Dict[int, Tuple[int, Tuple[str, int, str]]] = {}"
     end
 end
