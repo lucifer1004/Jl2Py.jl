@@ -101,6 +101,7 @@ using Test
     @testset "Ranges" begin
         @test jl2py("1:10") == "range(1, 11)"
         @test jl2py("1:2:10") == "range(1, 11, 2)"
+        @test jl2py("a:b") == "range(a, b + 1)"
         @test jl2py("1:0.1:5") == "range(1, 5, 0.1)"
     end
 
