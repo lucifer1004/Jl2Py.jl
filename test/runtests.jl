@@ -99,8 +99,9 @@ using Test
     end
 
     @testset "Ranges" begin
-        @test jl2py("1:10") == "range(1, 10)"
-        @test jl2py("1:2:10") == "range(1, 10, 2)"
+        @test jl2py("1:10") == "range(1, 11)"
+        @test jl2py("1:2:10") == "range(1, 11, 2)"
+        @test jl2py("1:0.1:5") == "range(1, 5, 0.1)"
     end
 
     @testset "List" begin
@@ -173,8 +174,9 @@ using Test
 
     @testset "Subscript" begin
         @test jl2py("a[1]") == "a[1]"
-        @test jl2py("a[1:5]") == "a[1:5]"
-        @test jl2py("a[1:2:5]") == "a[1:5:2]"
+        @test jl2py("a[1:5]") == "a[1:6]"
+        @test jl2py("a[1:2:5]") == "a[1:6:2]"
+        @test jl2py("d[\"a\"]") == "d['a']"
     end
 
     @testset "Function call (and builtins)" begin
@@ -221,5 +223,7 @@ using Test
               "def f(a, b, /, *c, x: float=2, y):\n    return x + y"
         @test jl2py("function f(a,b,c...;x::Float32=2, y, z...) x + y end") ==
               "def f(a, b, /, *c, x: float=2, y, **z):\n    return x + y"
+        @test jl2py("function f() for i in 1:10 print(i) end end") ==
+              "def f():\n    for i in range(1, 11):\n        print(i)"
     end
 end

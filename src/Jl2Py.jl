@@ -55,7 +55,7 @@ function __multiop(jl_expr, op)
     return binop
 end
 
-function __parse_arg(arg)
+function __parse_arg(arg::Union{Symbol,Expr})
     if isa(arg, Symbol)
         return AST.arg(pystr(arg))
     elseif arg.head == :(::)
@@ -66,6 +66,29 @@ end
 function __parse_pair(expr::Expr)
     (expr.head == :call && expr.args[1] == :(=>)) || error("Invalid pair expr")
     return __jl2py(expr.args[2]), __jl2py(expr.args[3])
+end
+
+"""
+Parse a Julia range (leading by :(:)).
+
+We modify the end when all args are `Integer`s. For example: 
+
+- `1:3` becomes `range(1, 4)`
+- `1:5:11` becomes `range(1, 12, 5)`
+- `1:-5:-9` becomes `range(1, -10, -5)`
+"""
+function __parse_range(args::AbstractVector)
+    if length(args) == 2
+        if isa(args[1], Integer) && isa(args[2], Integer)
+            return [AST.Constant(args[1]), AST.Constant(args[2] + 1)]
+        end
+        return [__jl2py(args[1]), __jl2py(args[2])]
+    else
+        if isa(args[1], Integer) && isa(args[2], Integer) && isa(args[3], Integer)
+            return [AST.Constant(args[1]), AST.Constant(args[3] + sign(args[2])), __jl2py(args[2])]
+        end
+        return [__jl2py(args[1]), __jl2py(args[3]), __jl2py(args[2])]
+    end
 end
 
 function __jl2py(args::AbstractVector)
@@ -125,7 +148,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
                 push!(body, AST.Return(body[end].target))
             elseif pyisinstance(body[end], AST.Expr)
                 body[end] = AST.Return(body[end].value)
-            else
+            elseif !pyisinstance(body[end], AST.For) && !pyisinstance(body[end], AST.While)
                 body[end] = AST.Return(body[end])
             end
         end
@@ -176,12 +199,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
     elseif jl_expr.head == :ref
         value = __jl2py(jl_expr.args[1])
         if isa(jl_expr.args[2], Expr) && jl_expr.args[2].args[1] == :(:)
-            args = __jl2py(jl_expr.args[2].args[2:end])
-            slice = if length(args) == 2
-                AST.Slice(args[1], args[2])
-            elseif length(args) == 3
-                AST.Slice(args[1], args[3], args[2])
-            end
+            slice = AST.Slice(__parse_range(jl_expr.args[2].args[2:end])...)
         else
             slice = __jl2py(jl_expr.args[2])
         end
@@ -202,12 +220,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         elseif jl_expr.args[1] == :*
             __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] == :(:)
-            args = __jl2py(jl_expr.args[2:end])
-            if length(args) == 2
-                return AST.Call(AST.Name("range"), args, [])
-            elseif length(args) == 3
-                return AST.Call(AST.Name("range"), [args[1], args[3], args[2]], [])
-            end
+            args = __parse_range(jl_expr.args[2:end])
+            return AST.Call(AST.Name("range"), args, [])
         elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
             __binop(jl_expr, OP_DICT[jl_expr.args[1]])
         elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=, :∈, :∉, :in]
@@ -275,8 +289,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false)
         value = __jl2py(jl_expr.args[2])
         return AST.fix_missing_locations(AST.AugAssign(target, OP_DICT[jl_expr.head](), value))
     elseif jl_expr.head == :vect
-        listop = AST.List(__jl2py(jl_expr.args))
-        return listop
+        return AST.List(__jl2py(jl_expr.args))
     end
 end
 
