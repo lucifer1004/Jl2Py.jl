@@ -17,6 +17,12 @@ using Test
         @test jl2py("foo") == "foo"
     end
 
+    @testset "Attributes" begin
+        @test jl2py("a.b") == "a.b"
+        @test jl2py("a.b.c") == "a.b.c"
+        @test jl2py("a.b.c.d") == "a.b.c.d"
+    end
+
     @testset "UAdd & USub" begin
         @test jl2py("+3") == "3"
         @test jl2py("-3") == "-3"

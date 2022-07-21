@@ -136,6 +136,10 @@ function __jl2py(jl_symbol::Symbol; topofblock::Bool=false)
     return topofblock ? AST.Expr(name) : name
 end
 
+function __jl2py(jl_qnode::QuoteNode; topofblock::Bool=false)
+    return string(jl_qnode.value)
+end
+
 function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, iscomprehension::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
@@ -211,6 +215,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         return AST.Tuple(__jl2py(jl_expr.args))
     elseif jl_expr.head == :...
         return AST.Starred(__jl2py(jl_expr.args[1]))
+    elseif jl_expr.head == :.
+        return AST.Attribute(__jl2py(jl_expr.args[1]), __jl2py(jl_expr.args[2]))
     elseif jl_expr.head ∈ [:if, :elseif]
         # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
         test = __jl2py(jl_expr.args[1])
