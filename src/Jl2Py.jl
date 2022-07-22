@@ -392,6 +392,8 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
     end
 end
 
+jl2py(ast) = __jl2py(ast)
+
 function jl2py(jl_str::String; apply_polyfill::Bool=false)
     jl_ast = Meta.parse(jl_str)
     if isnothing(jl_ast)
