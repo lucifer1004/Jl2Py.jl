@@ -1,6 +1,6 @@
 module Jl2Py
 
-export jl2py
+export jl2py, unparse
 
 using PythonCall
 
@@ -413,13 +413,19 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
 end
 
 jl2py(ast) = __jl2py(ast)
+unparse(ast) = AST.unparse(ast)
 
-function jl2py(jl_str::String; apply_polyfill::Bool=false)
+function jl2py(jl_str::String; ast_only::Bool=false, apply_polyfill::Bool=false)
     jl_ast = Meta.parse(jl_str)
     if isnothing(jl_ast)
         return ""
     end
     py_ast = __jl2py(jl_ast)
+
+    if ast_only
+        return py_ast
+    end
+
     _module = AST.Module(PyList([py_ast]), [])
     py_str = AST.unparse(_module)
 

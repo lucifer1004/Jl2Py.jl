@@ -307,6 +307,10 @@ using Test
             @test pyconvert(Bool, pyisinstance(a, Jl2Py.AST.Constant) && a.value == 1)
         end
 
+        @testset "Reexported unparse" begin
+            @test pyconvert(String, unparse(jl2py("a + b"; ast_only=true))) == "a + b"
+        end
+
         @testset "Apply Polyfill" begin
             polyfill = read(joinpath(@__DIR__, "..", "polyfill", "polyfill.py"), String)
 
