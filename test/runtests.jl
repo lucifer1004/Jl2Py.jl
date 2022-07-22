@@ -281,6 +281,13 @@ using Test
                   "def f():\n    for i in range(1, 11):\n        print(i)"
         end
 
+        @testset "Lambda" begin
+            @test jl2py("x -> x + 1") == "lambda x, /: x + 1"
+            @test jl2py("x::Float64 -> x + 1") == "lambda x: float, /: x + 1"
+            @test jl2py("(x::Float64, y) -> x + y") == "lambda x: float, y, /: x + y"
+            @test jl2py("(x::Float64, y)::Float64 -> x + y") == "lambda x: float, y, /: x + y"
+        end
+
         @testset "Type annotations" begin
             @test jl2py("a::Nothing = nothing") == "(a): None = None"
             @test jl2py("a::Vector{Int} = 2") == "(a): List[int] = 2"

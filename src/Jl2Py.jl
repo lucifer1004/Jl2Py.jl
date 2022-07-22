@@ -1,6 +1,6 @@
 module Jl2Py
 
-export jl2py
+export jl2py, unparse
 
 using PythonCall
 
@@ -61,6 +61,45 @@ function __parse_arg(arg::Union{Symbol,Expr})
     elseif arg.head == :(::)
         return AST.arg(pystr(arg.args[1]), __parse_type(arg.args[2]))
     end
+end
+
+function __parse_args(params)
+    posonlyargs = []
+    defaults = []
+    kwonlyargs = []
+    kw_defaults = []
+    kwarg = nothing
+    vararg = nothing
+
+    for arg in params
+        if isa(arg, Symbol) || arg.head == :(::)
+            push!(posonlyargs, __parse_arg(arg))
+        elseif arg.head == :kw
+            push!(posonlyargs, __parse_arg(arg.args[1]))
+            push!(defaults, __jl2py(arg.args[2]))
+        elseif arg.head == :...
+            vararg = __parse_arg(arg.args[1])
+        elseif arg.head == :parameters
+            for param in arg.args
+                if isa(param, Symbol)
+                    push!(kwonlyargs, __parse_arg(param))
+                    push!(kw_defaults, nothing)
+                elseif param.head == :kw
+                    push!(kwonlyargs, __parse_arg(param.args[1]))
+                    push!(kw_defaults, __jl2py(param.args[2]))
+                elseif param.head == :...
+                    kwarg = __parse_arg(param.args[1])
+                end
+            end
+        end
+    end
+
+    return AST.arguments(; args=PyList(),
+                         posonlyargs=PyList(posonlyargs),
+                         kwonlyargs=PyList(kwonlyargs),
+                         defaults=PyList(defaults),
+                         kw_defaults=PyList(kw_defaults),
+                         kwarg=kwarg, vararg=vararg)
 end
 
 function __parse_pair(expr::Expr)
@@ -145,14 +184,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
         return PyList(py_exprs)
     elseif jl_expr.head == :function
-        posonlyargs = []
-        defaults = []
-        kwonlyargs = []
-        kw_defaults = []
-        kwarg = nothing
-        vararg = nothing
         returns = nothing
-
         if jl_expr.args[1].head == :call
             name = jl_expr.args[1].args[1]
             params = jl_expr.args[1].args[2:end]
@@ -163,29 +195,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
             params = jl_expr.args[1].args[1].args[2:end]
         end
 
-        for arg in params
-            if isa(arg, Symbol) || arg.head == :(::)
-                push!(posonlyargs, __parse_arg(arg))
-            elseif arg.head == :kw
-                push!(posonlyargs, __parse_arg(arg.args[1]))
-                push!(defaults, __jl2py(arg.args[2]))
-            elseif arg.head == :...
-                vararg = __parse_arg(arg.args[1])
-            elseif arg.head == :parameters
-                for param in arg.args
-                    if isa(param, Symbol)
-                        push!(kwonlyargs, __parse_arg(param))
-                        push!(kw_defaults, nothing)
-                    elseif param.head == :kw
-                        push!(kwonlyargs, __parse_arg(param.args[1]))
-                        push!(kw_defaults, __jl2py(param.args[2]))
-                    elseif param.head == :...
-                        kwarg = __parse_arg(param.args[1])
-                    end
-                end
-            end
-        end
-
+        arguments = __parse_args(params)
         body = __jl2py(jl_expr.args[2])
         if isempty(body)
             push!(body, AST.Pass())
@@ -202,12 +212,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         end
 
         return AST.fix_missing_locations(AST.FunctionDef(pystr(name),
-                                                         AST.arguments(; args=PyList(),
-                                                                       posonlyargs=PyList(posonlyargs),
-                                                                       kwonlyargs=PyList(kwonlyargs),
-                                                                       defaults=PyList(defaults),
-                                                                       kw_defaults=PyList(kw_defaults),
-                                                                       kwarg=kwarg, vararg=vararg),
+                                                         arguments,
                                                          PyList(body), PyList(); returns=returns))
     elseif jl_expr.head ∈ [:(&&), :(||)]
         __boolop(jl_expr, OP_DICT[jl_expr.head])
@@ -217,6 +222,21 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         return AST.Starred(__jl2py(jl_expr.args[1]))
     elseif jl_expr.head == :.
         return AST.Attribute(__jl2py(jl_expr.args[1]), __jl2py(jl_expr.args[2]))
+    elseif jl_expr.head == :->
+        body = __jl2py(jl_expr.args[2])
+
+        if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::) && !isa(jl_expr.args[1].args[1], Symbol)
+            jl_expr = jl_expr.args[1]
+        end
+
+        if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :(::)
+            arguments = __parse_args([jl_expr.args[1]])
+        else
+            jl_expr.args[1].head == :tuple || error("Invalid lambda")
+            arguments = __parse_args(jl_expr.args[1].args)
+        end
+
+        return AST.Lambda(arguments, body[end])
     elseif jl_expr.head ∈ [:if, :elseif]
         # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
         test = __jl2py(jl_expr.args[1])
@@ -393,6 +413,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
 end
 
 jl2py(ast) = __jl2py(ast)
+unparse(py_ast) = AST.unparse(py_ast)
 
 function jl2py(jl_str::String; apply_polyfill::Bool=false)
     jl_ast = Meta.parse(jl_str)
