@@ -182,13 +182,35 @@ using Test
                   "if x > 3:\n    x += 2\nelif x < 0:\n    x -= 1"
         end
 
-        @testset "While statement" begin
-            @test jl2py("while x > 3 x -= 1 end") == "while x > 3:\n    x -= 1"
-        end
+        @testset "Loops" begin
+            @testset "While statement" begin
+                @test jl2py("while x > 3 x -= 1 end") == "while x > 3:\n    x -= 1"
+            end
 
-        @testset "For statement" begin
-            @test jl2py("for (x, y) in zip(a, b) print(x) end") ==
-                  "for (x, y) in zip(a, b):\n    print(x)"
+            @testset "For statement" begin
+                @test jl2py("for (x, y) in zip(a, b) print(x) end") ==
+                      "for (x, y) in zip(a, b):\n    print(x)"
+            end
+
+            @testset "Loop with continue & break" begin
+                @test jl2py("""
+                for i in 1:10
+                    if i % 2 == 0
+                        continue
+                    elseif i % 7 == 0
+                        break
+                    else
+                        print(i)
+                    end
+                end""") ==
+                      "for i in range(1, 11):\n" *
+                      "    if i % 2 == 0:\n" *
+                      "        continue\n" *
+                      "    elif i % 7 == 0:\n" *
+                      "        break\n" *
+                      "    else:\n" *
+                      "        print(i)"
+            end
         end
 
         @testset "Subscript" begin

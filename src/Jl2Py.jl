@@ -263,6 +263,10 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         iter = __jl2py(jl_expr.args[1].args[2])
         body = __jl2py(jl_expr.args[2])
         return AST.fix_missing_locations(AST.For(target, iter, body, nothing, nothing))
+    elseif jl_expr.head == :continue
+        return AST.Continue()
+    elseif jl_expr.head == :break
+        return AST.Break()
     elseif jl_expr.head == :return
         value = __jl2py(jl_expr.args[1])
         return AST.Return(value)
