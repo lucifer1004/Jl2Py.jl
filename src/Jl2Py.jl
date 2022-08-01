@@ -179,6 +179,8 @@ function __jl2py(jl_qnode::QuoteNode; topofblock::Bool=false)
     return string(jl_qnode.value)
 end
 
+__jl2py(::Nothing) = AST.Constant(nothing)
+
 function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, iscomprehension::Bool=false)
     if jl_expr.head ∈ [:block, :toplevel]
         py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
@@ -188,11 +190,13 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
         if jl_expr.args[1].head == :call
             name = jl_expr.args[1].args[1]
             params = jl_expr.args[1].args[2:end]
-        else
-            jl_expr.args[1].head == :(::) || error("Invalid function defintion")
+        elseif jl_expr.args[1].head == :(::)
             returns = __parse_type(jl_expr.args[1].args[2])
             name = jl_expr.args[1].args[1].args[1]
             params = jl_expr.args[1].args[1].args[2:end]
+        else
+            jl_expr.head = :-> # Assume it to be a lambda
+            return __jl2py(jl_expr)
         end
 
         arguments = __parse_args(params)
@@ -236,7 +240,17 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
             arguments = __parse_args(jl_expr.args[1].args)
         end
 
-        return AST.Lambda(arguments, body[end])
+        length(body) >= 2 && error("Python lambdas can only have one statement.")
+
+        # # Use a hacky way to compress all lines of body into one line
+        # if length(body) > 1
+        #     prev = map(x -> AST.BoolOp(AST.And(), [x, AST.Constant(false)]), body[1:(end - 1)])
+        #     body = AST.BoolOp(AST.Or(), PyList([prev..., body[end]]))
+        # else
+        #     body = body[1]
+        # end
+
+        return AST.Lambda(arguments, body[1])
     elseif jl_expr.head ∈ [:if, :elseif]
         # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
         test = __jl2py(jl_expr.args[1])
@@ -268,8 +282,7 @@ function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, i
     elseif jl_expr.head == :break
         return AST.Break()
     elseif jl_expr.head == :return
-        value = __jl2py(jl_expr.args[1])
-        return AST.Return(value)
+        return AST.Return(__jl2py(jl_expr.args[1]))
     elseif jl_expr.head == :ref
         value = __jl2py(jl_expr.args[1])
         slices = map(jl_expr.args[2:end]) do arg

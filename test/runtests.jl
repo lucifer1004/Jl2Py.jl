@@ -281,6 +281,7 @@ using Test
 
         @testset "Function defintion" begin
             @test jl2py("function f(x) end") == "def f(x, /):\n    pass"
+            @test jl2py("function f(x) return end") == "def f(x, /):\n    return None"
             @test jl2py("function f(x) return x end") == "def f(x, /):\n    return x"
             @test jl2py("function f(x) y; x + 1 end") == "def f(x, /):\n    y\n    return x + 1"
             @test jl2py("function f(x) x + 2 end") == "def f(x, /):\n    return x + 2"
@@ -290,6 +291,8 @@ using Test
             @test jl2py("function f(x::Float64) x + 2 end") == "def f(x: float, /):\n    return x + 2"
             @test jl2py("function f(x::Int64, y) x + y end") == "def f(x: int, y, /):\n    return x + y"
             @test jl2py("function f(x::Int)::Int x end") == "def f(x: int, /) -> int:\n    return x"
+            @test jl2py("function f(x::Int, y::Int)::Int x + y end") ==
+                  "def f(x: int, y: int, /) -> int:\n    return x + y"
             @test jl2py("function f(x=2, y=3) x + y end") == "def f(x=2, y=3, /):\n    return x + y"
             @test jl2py("function f(x::Int=2, y=3) x + y end") == "def f(x: int=2, y=3, /):\n    return x + y"
             @test jl2py("function f(;x::Int=2, y=3) x + y end") == "def f(*, x: int=2, y=3):\n    return x + y"
@@ -308,6 +311,8 @@ using Test
             @test jl2py("x::Float64 -> x + 1") == "lambda x: float, /: x + 1"
             @test jl2py("(x::Float64, y) -> x + y") == "lambda x: float, y, /: x + y"
             @test jl2py("(x::Float64, y)::Float64 -> x + y") == "lambda x: float, y, /: x + y"
+            @test jl2py("function (x) x + 1 end") == "lambda x, /: x + 1"
+            @test_throws ErrorException jl2py("function (x) x + 1; y + 1 end")
         end
 
         @testset "Type annotations" begin
