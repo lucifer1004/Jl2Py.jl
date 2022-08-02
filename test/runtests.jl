@@ -326,6 +326,10 @@ using Test
             @test jl2py("a::ListNode = ListNode()") ==
                   "(a): ListNode = ListNode()" # Unknown types are not changed
         end
+
+        @testset "Unmatched expressions" begin
+            @test jl2py("a = ") == "None"
+        end
     end
 
     @testset "Misc" begin
