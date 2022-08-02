@@ -2,6 +2,7 @@ module Jl2Py
 
 export jl2py, unparse
 
+using MLStyle
 using PythonCall
 
 const AST = PythonCall.pynew()
@@ -124,31 +125,20 @@ This might cause problems in such cases as `1.5:1.8`, but since Python only supp
 we do not consider such edge cases here.
 """
 function __parse_range(args::AbstractVector)
-    if length(args) == 2
-        if isa(args[1], Integer) && isa(args[2], Integer)
-            return [AST.Constant(args[1]), AST.Constant(args[2] + 1)]
-        end
-
-        return [__jl2py(args[1]), AST.BinOp(__jl2py(args[2]), AST.Add(), AST.Constant(1))]
-    else
-        if isa(args[1], Integer) && isa(args[2], Integer) && isa(args[3], Integer)
-            return [AST.Constant(args[1]), AST.Constant(args[3] + sign(args[2])), __jl2py(args[2])]
-        end
-        return [__jl2py(args[1]), __jl2py(args[3]), __jl2py(args[2])]
+    @match args begin
+        [::Integer, ::Integer] => [AST.Constant(args[1]), AST.Constant(args[2] + 1)]
+        [_, _] => [__jl2py(args[1]), AST.BinOp(__jl2py(args[2]), AST.Add(), AST.Constant(1))]
+        [::Integer, ::Integer, ::Integer] => [AST.Constant(args[1]), AST.Constant(args[3] + sign(args[2])),
+                                              __jl2py(args[2])]
+        [_, _, _] => [__jl2py(args[1]), __jl2py(args[3]), __jl2py(args[2])]
     end
 end
 
 function __parse_type(typ::Union{Symbol,Expr})
-    if isa(typ, Symbol)
-        return AST.Name(get(TYPE_DICT, typ, pystr(typ)))
-    else
-        typ.head == :curly || error("Invalid type expr")
-        if length(typ.args) == 2
-            slice = __parse_type(typ.args[2])
-        else
-            slice = AST.Tuple(map(__parse_type, typ.args[2:end]))
-        end
-        return AST.Subscript(__parse_type(typ.args[1]), slice)
+    @match typ begin
+        ::Symbol => AST.Name(get(TYPE_DICT, typ, pystr(typ)))
+        Expr(:curly, arg1, arg2) => AST.Subscript(__parse_type(arg1), __parse_type(arg2))
+        Expr(:curly, arg1, args...) => AST.Subscript(__parse_type(arg1), AST.Tuple(map(__parse_type, args)))
     end
 end
 
