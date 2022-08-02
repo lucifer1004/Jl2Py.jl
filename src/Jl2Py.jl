@@ -172,250 +172,248 @@ end
 __jl2py(::Nothing) = AST.Constant(nothing)
 
 function __jl2py(jl_expr::Expr; topofblock::Bool=false, isflatten::Bool=false, iscomprehension::Bool=false)
-    if jl_expr.head ∈ [:block, :toplevel]
-        py_exprs = [__jl2py(expr; topofblock=true) for expr in jl_expr.args if !isa(expr, LineNumberNode)]
-        return PyList(py_exprs)
-    elseif jl_expr.head == :function
-        returns = nothing
-        if jl_expr.args[1].head == :call
-            name = jl_expr.args[1].args[1]
-            params = jl_expr.args[1].args[2:end]
-        elseif jl_expr.args[1].head == :(::)
-            returns = __parse_type(jl_expr.args[1].args[2])
-            name = jl_expr.args[1].args[1].args[1]
-            params = jl_expr.args[1].args[1].args[2:end]
-        else
-            jl_expr.head = :-> # Assume it to be a lambda
-            return __jl2py(jl_expr)
-        end
-
-        arguments = __parse_args(params)
-        body = __jl2py(jl_expr.args[2])
-        if isempty(body)
-            push!(body, AST.Pass())
-        elseif !pyisinstance(body[end], AST.Return)
-            if pyisinstance(body[end], AST.Assign)
-                push!(body, AST.Return(body[end].targets[0]))
-            elseif pyisinstance(body[end], AST.AugAssign)
-                push!(body, AST.Return(body[end].target))
-            elseif pyisinstance(body[end], AST.Expr)
-                body[end] = AST.Return(body[end].value)
-            elseif !pyisinstance(body[end], AST.For) && !pyisinstance(body[end], AST.While)
-                body[end] = AST.Return(body[end])
-            end
-        end
-
-        return AST.fix_missing_locations(AST.FunctionDef(pystr(name),
-                                                         arguments,
-                                                         PyList(body), PyList(); returns=returns))
-    elseif jl_expr.head ∈ [:(&&), :(||)]
-        __boolop(jl_expr, OP_DICT[jl_expr.head])
-    elseif jl_expr.head == :tuple
-        return AST.Tuple(__jl2py(jl_expr.args))
-    elseif jl_expr.head == :...
-        return AST.Starred(__jl2py(jl_expr.args[1]))
-    elseif jl_expr.head == :.
-        return AST.Attribute(__jl2py(jl_expr.args[1]), __jl2py(jl_expr.args[2]))
-    elseif jl_expr.head == :->
-        body = __jl2py(jl_expr.args[2])
-
-        if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::) && !isa(jl_expr.args[1].args[1], Symbol)
-            jl_expr = jl_expr.args[1]
-        end
-
-        if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :(::)
-            arguments = __parse_args([jl_expr.args[1]])
-        else
-            jl_expr.args[1].head == :tuple || error("Invalid lambda")
-            arguments = __parse_args(jl_expr.args[1].args)
-        end
-
-        length(body) >= 2 && error("Python lambdas can only have one statement.")
-
-        # # Use a hacky way to compress all lines of body into one line
-        # if length(body) > 1
-        #     prev = map(x -> AST.BoolOp(AST.And(), [x, AST.Constant(false)]), body[1:(end - 1)])
-        #     body = AST.BoolOp(AST.Or(), PyList([prev..., body[end]]))
-        # else
-        #     body = body[1]
-        # end
-
-        return AST.Lambda(arguments, body[1])
-    elseif jl_expr.head ∈ [:if, :elseif]
-        # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
-        test = __jl2py(jl_expr.args[1])
-        if isa(jl_expr.args[2], Expr) && jl_expr.args[2].head == :block
-            # AST.If
-            body = __jl2py(jl_expr.args[2])
-            orelse = length(jl_expr.args) == 3 ? __jl2py(jl_expr.args[3]) : nothing
-            if !isnothing(orelse) && !isa(orelse, Vector)
-                orelse = PyList([orelse])
-            end
-            return AST.If(test, body, orelse)
-        else
-            # AST.IfExp
-            body = __jl2py(jl_expr.args[2])
-            orelse = __jl2py(jl_expr.args[3])
-            return AST.IfExp(test, body, orelse)
-        end
-    elseif jl_expr.head == :while
-        test = __jl2py(jl_expr.args[1])
-        body = __jl2py(jl_expr.args[2])
-        return AST.While(test, body, nothing)
-    elseif jl_expr.head == :for
-        target = __jl2py(jl_expr.args[1].args[1])
-        iter = __jl2py(jl_expr.args[1].args[2])
-        body = __jl2py(jl_expr.args[2])
-        return AST.fix_missing_locations(AST.For(target, iter, body, nothing, nothing))
-    elseif jl_expr.head == :continue
-        return AST.Continue()
-    elseif jl_expr.head == :break
-        return AST.Break()
-    elseif jl_expr.head == :return
-        return AST.Return(__jl2py(jl_expr.args[1]))
-    elseif jl_expr.head == :ref
-        value = __jl2py(jl_expr.args[1])
-        slices = map(jl_expr.args[2:end]) do arg
-            if isa(arg, Expr) && arg.args[1] == :(:)
-                slice = AST.Slice(__parse_range(arg.args[2:end])...)
+    @match jl_expr begin
+        Expr(:block, args...) ||
+        Expr(:toplevel, args...) => PyList([__jl2py(expr; topofblock=true)
+                                            for expr in args if !isa(expr, LineNumberNode)])
+        Expr(:function, args...) => begin
+            returns = nothing
+            if jl_expr.args[1].head == :call
+                name = jl_expr.args[1].args[1]
+                params = jl_expr.args[1].args[2:end]
+            elseif jl_expr.args[1].head == :(::)
+                returns = __parse_type(jl_expr.args[1].args[2])
+                name = jl_expr.args[1].args[1].args[1]
+                params = jl_expr.args[1].args[1].args[2:end]
             else
-                slice = __jl2py(arg)
+                jl_expr.head = :-> # Assume it to be a lambda
+                return __jl2py(jl_expr)
+            end
+
+            arguments = __parse_args(params)
+            body = __jl2py(jl_expr.args[2])
+            if isempty(body)
+                push!(body, AST.Pass())
+            elseif !pyisinstance(body[end], AST.Return)
+                if pyisinstance(body[end], AST.Assign)
+                    push!(body, AST.Return(body[end].targets[0]))
+                elseif pyisinstance(body[end], AST.AugAssign)
+                    push!(body, AST.Return(body[end].target))
+                elseif pyisinstance(body[end], AST.Expr)
+                    body[end] = AST.Return(body[end].value)
+                elseif !pyisinstance(body[end], AST.For) && !pyisinstance(body[end], AST.While)
+                    body[end] = AST.Return(body[end])
+                end
+            end
+
+            return AST.fix_missing_locations(AST.FunctionDef(pystr(name),
+                                                             arguments,
+                                                             PyList(body), PyList(); returns=returns))
+        end
+        Expr(:(&&), _...) ||
+        Expr(:(||), _...) => __boolop(jl_expr, OP_DICT[jl_expr.head])
+        Expr(:tuple, args...) => AST.Tuple(__jl2py(jl_expr.args))
+        Expr(:..., arg) => AST.Starred(__jl2py(arg))
+        Expr(:., arg1, arg2) => AST.Attribute(__jl2py(arg1), __jl2py(arg2))
+        Expr(:->, _...) => begin
+            body = __jl2py(jl_expr.args[2])
+
+            if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::) && !isa(jl_expr.args[1].args[1], Symbol)
+                jl_expr = jl_expr.args[1]
+            end
+
+            if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :(::)
+                arguments = __parse_args([jl_expr.args[1]])
+            else
+                jl_expr.args[1].head == :tuple || error("Invalid lambda")
+                arguments = __parse_args(jl_expr.args[1].args)
+            end
+
+            length(body) >= 2 && error("Python lambdas can only have one statement.")
+
+            # # Use a hacky way to compress all lines of body into one line
+            # if length(body) > 1
+            #     prev = map(x -> AST.BoolOp(AST.And(), [x, AST.Constant(false)]), body[1:(end - 1)])
+            #     body = AST.BoolOp(AST.Or(), PyList([prev..., body[end]]))
+            # else
+            #     body = body[1]
+            # end
+
+            return AST.Lambda(arguments, body[1])
+        end
+        Expr(:if, _...) ||
+        Expr(:elseif, _...) => begin
+            # Julia's `if` is always an expression, while Python's `if` is mostly a statement.
+            test = __jl2py(jl_expr.args[1])
+            if isa(jl_expr.args[2], Expr) && jl_expr.args[2].head == :block
+                # AST.If
+                body = __jl2py(jl_expr.args[2])
+                orelse = length(jl_expr.args) == 3 ? __jl2py(jl_expr.args[3]) : nothing
+                if !isnothing(orelse) && !isa(orelse, Vector)
+                    orelse = PyList([orelse])
+                end
+                return AST.If(test, body, orelse)
+            else
+                # AST.IfExp
+                body = __jl2py(jl_expr.args[2])
+                orelse = __jl2py(jl_expr.args[3])
+                return AST.IfExp(test, body, orelse)
             end
         end
-        slice = length(slices) == 1 ? slices[1] : AST.Tuple(PyList(slices))
-        return AST.Subscript(value, slice)
-    elseif jl_expr.head == :comprehension
-        return AST.ListComp(__jl2py(jl_expr.args[1]; iscomprehension=true)...)
-    elseif jl_expr.head == :generator
-        if isflatten
-            elt, extra_gens = __jl2py(jl_expr.args[1]; iscomprehension=iscomprehension)
-            gens = __parse_generator(jl_expr.args[2:end])
-            append!(gens, extra_gens)
-        else
-            elt = __jl2py(jl_expr.args[1])
-            gens = __parse_generator(jl_expr.args[2:end])
+        Expr(:while, test, body) => AST.While(__jl2py(test), __jl2py(body), nothing)
+        Expr(:for, Expr(_, target, iter), body) => AST.fix_missing_locations(AST.For(__jl2py(target), __jl2py(iter),
+                                                                                     __jl2py(body), nothing, nothing))
+        Expr(:continue) => AST.Continue()
+        Expr(:break) => AST.Break()
+        Expr(:return, arg) => AST.Return(__jl2py(arg))
+        Expr(:ref, value, slices...) => begin
+            value = __jl2py(value)
+            map!(slices, slices) do arg
+                if isa(arg, Expr) && arg.args[1] == :(:)
+                    slice = AST.Slice(__parse_range(arg.args[2:end])...)
+                else
+                    slice = __jl2py(arg)
+                end
+            end
+            slice = length(slices) == 1 ? slices[1] : AST.Tuple(PyList(slices))
+            return AST.Subscript(value, slice)
         end
-        return iscomprehension ? (elt, gens) : AST.GeneratorExp(elt, gens)
-    elseif jl_expr.head == :filter
-        filter = __jl2py(jl_expr.args[1])
-        map(2:length(jl_expr.args)) do i
-            arg = jl_expr.args[i]
-            target = __jl2py(arg.args[1])
-            iter = __jl2py(arg.args[2])
-            return i == length(jl_expr.args) ? AST.comprehension(target, iter, PyList([filter]); is_async=false) :
-                   AST.comprehension(target, iter, PyList(); is_async=false)
-        end
-    elseif jl_expr.head == :flatten
-        return __jl2py(jl_expr.args[1]; isflatten=true, iscomprehension=iscomprehension)
-    elseif jl_expr.head == :call
-        if jl_expr.args[1] == :+
-            if length(jl_expr.args) == 2
-                __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
+        Expr(:comprehension, arg) => AST.ListComp(__jl2py(arg; iscomprehension=true)...)
+        Expr(:generator, arg1, args...) => begin
+            if isflatten
+                elt, extra_gens = __jl2py(arg1; iscomprehension=iscomprehension)
+                gens = __parse_generator(args)
+                append!(gens, extra_gens)
             else
+                elt = __jl2py(arg1)
+                gens = __parse_generator(args)
+            end
+            return iscomprehension ? (elt, gens) : AST.GeneratorExp(elt, gens)
+        end
+        Expr(:filter, filter, args...) => begin
+            filter = __jl2py(filter)
+            map(1:length(args)) do i
+                arg = args[i]
+                target = __jl2py(arg.args[1])
+                iter = __jl2py(arg.args[2])
+                return i == length(args) ? AST.comprehension(target, iter, PyList([filter]); is_async=false) :
+                       AST.comprehension(target, iter, PyList(); is_async=false)
+            end
+        end
+        Expr(:flatten, arg) => __jl2py(arg; isflatten=true, iscomprehension=iscomprehension)
+        Expr(:comparison, _...) => __compareop_from_comparison(jl_expr)
+        Expr(:call, _...) => begin
+            if jl_expr.args[1] == :+
+                if length(jl_expr.args) == 2
+                    __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
+                else
+                    __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
+                end
+            elseif jl_expr.args[1] ∈ [:-, :~, :(!)]
+                if length(jl_expr.args) == 2
+                    __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
+                else
+                    __binop(jl_expr, OP_DICT[jl_expr.args[1]])
+                end
+            elseif jl_expr.args[1] == :*
                 __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
-            end
-        elseif jl_expr.args[1] ∈ [:-, :~, :(!)]
-            if length(jl_expr.args) == 2
-                __unaryop(jl_expr, OP_UDICT[jl_expr.args[1]])
-            else
+            elseif jl_expr.args[1] == :(:)
+                args = __parse_range(jl_expr.args[2:end])
+                AST.Call(AST.Name("range"), args, [])
+            elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
                 __binop(jl_expr, OP_DICT[jl_expr.args[1]])
-            end
-        elseif jl_expr.args[1] == :*
-            __multiop(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] == :(:)
-            args = __parse_range(jl_expr.args[2:end])
-            return AST.Call(AST.Name("range"), args, [])
-        elseif jl_expr.args[1] ∈ [:/, :÷, :div, :%, :mod, :^, :&, :|, :⊻, :xor, :(<<), :(>>)]
-            __binop(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=, :∈, :∉, :in]
-            __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
-        elseif jl_expr.args[1] == :(=>)
-            return AST.Tuple(__jl2py(jl_expr.args[2:end]))
-        elseif jl_expr.args[1] == :Dict ||
-               (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
-            # Handle generator separately
-            if length(jl_expr.args) == 2 && jl_expr.args[2].head == :generator
-                generator = __jl2py(jl_expr.args[2])
-                dict_call = AST.Call(AST.Name("dict"), PyList([generator]), PyList())
-                return topofblock ? AST.Expr(dict_call) : dict_call
-            end
+            elseif jl_expr.args[1] ∈ [:(==), :(===), :≠, :(!=), :(!==), :<, :<=, :>, :>=, :∈, :∉, :in]
+                __compareop_from_call(jl_expr, OP_DICT[jl_expr.args[1]])
+            elseif jl_expr.args[1] == :(=>)
+                AST.Tuple(__jl2py(jl_expr.args[2:end]))
+            elseif jl_expr.args[1] == :Dict ||
+                   (isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :curly && jl_expr.args[1].args[1] == :Dict)
+                # Handle generator separately
+                if length(jl_expr.args) == 2 && jl_expr.args[2].head == :generator
+                    generator = __jl2py(jl_expr.args[2])
+                    dict_call = AST.Call(AST.Name("dict"), PyList([generator]), PyList())
+                    return topofblock ? AST.Expr(dict_call) : dict_call
+                end
 
-            _keys = []
-            values = []
-            for arg in jl_expr.args[2:end]
-                if isa(arg, Expr) && arg.head == :...
-                    push!(_keys, nothing)
-                    push!(values, __jl2py(arg.args[1]))
-                else
-                    key, value = __parse_pair(arg)
-                    push!(_keys, key)
-                    push!(values, value)
+                _keys = []
+                values = []
+                for arg in jl_expr.args[2:end]
+                    if isa(arg, Expr) && arg.head == :...
+                        push!(_keys, nothing)
+                        push!(values, __jl2py(arg.args[1]))
+                    else
+                        key, value = __parse_pair(arg)
+                        push!(_keys, key)
+                        push!(values, value)
+                    end
                 end
-            end
-            return AST.fix_missing_locations(AST.Dict(PyList(_keys), PyList(values)))
-        else
-            if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :curly
-                # We discard the curly braces trailing a function call
-                arg = isa(jl_expr.args[1], Symbol) ? jl_expr.args[1] : jl_expr.args[1].args[1]
-                if arg ∈ keys(BUILTIN_DICT)
-                    func = AST.Name(BUILTIN_DICT[arg])
-                elseif string(jl_expr.args[1])[end] != '!'
-                    func = AST.Name(string(arg))
-                else
-                    func = AST.Name(string(arg)[1:(end - 1)] * "_inplace")
-                end
+
+                AST.fix_missing_locations(AST.Dict(PyList(_keys), PyList(values)))
             else
-                func = __jl2py(jl_expr.args[1])
-            end
-            parameters = []
-            keywords = []
-            for arg in jl_expr.args[2:end]
-                if isa(arg, Expr) && arg.head == :parameters
-                    for param in arg.args
-                        if param.head == :kw
-                            key = pystr(param.args[1])
-                            value = __jl2py(param.args[2])
-                            push!(keywords, AST.keyword(key, value))
-                        elseif param.head == :...
-                            value = __jl2py(param.args[1])
-                            push!(keywords, AST.keyword(nothing, value))
-                        end
+                if isa(jl_expr.args[1], Symbol) || jl_expr.args[1].head == :curly
+                    # We discard the curly braces trailing a function call
+                    arg = isa(jl_expr.args[1], Symbol) ? jl_expr.args[1] : jl_expr.args[1].args[1]
+                    if arg ∈ keys(BUILTIN_DICT)
+                        func = AST.Name(BUILTIN_DICT[arg])
+                    elseif string(jl_expr.args[1])[end] != '!'
+                        func = AST.Name(string(arg))
+                    else
+                        func = AST.Name(string(arg)[1:(end - 1)] * "_inplace")
                     end
                 else
-                    push!(parameters, __jl2py(arg))
+                    func = __jl2py(jl_expr.args[1])
                 end
+                parameters = []
+                keywords = []
+                for arg in jl_expr.args[2:end]
+                    if isa(arg, Expr) && arg.head == :parameters
+                        for param in arg.args
+                            if param.head == :kw
+                                key = pystr(param.args[1])
+                                value = __jl2py(param.args[2])
+                                push!(keywords, AST.keyword(key, value))
+                            elseif param.head == :...
+                                value = __jl2py(param.args[1])
+                                push!(keywords, AST.keyword(nothing, value))
+                            end
+                        end
+                    else
+                        push!(parameters, __jl2py(arg))
+                    end
+                end
+
+                call = AST.Call(func, parameters, keywords)
+                topofblock ? AST.Expr(call) : call
+            end
+        end
+        Expr(:(=), _...) => begin
+            # AnnAssign
+            if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::)
+                target = __jl2py(jl_expr.args[1].args[1])
+                annotation = __parse_type(jl_expr.args[1].args[2])
+                value = __jl2py(jl_expr.args[2])
+                return AST.fix_missing_locations(AST.AnnAssign(target, annotation, value, nothing))
             end
 
-            call = AST.Call(func, parameters, keywords)
-            return topofblock ? AST.Expr(call) : call
+            # Assign
+            targets = PyList()
+            curr = jl_expr.args
+            while isa(curr[2], Expr) && curr[2].head == :(=)
+                push!(targets, __jl2py(curr[1]))
+                curr = curr[2].args
+            end
+            last_target, value = __jl2py(curr)
+            push!(targets, last_target)
+            return AST.fix_missing_locations(AST.Assign(targets, value))
         end
-    elseif jl_expr.head == :comparison
-        __compareop_from_comparison(jl_expr)
-    elseif jl_expr.head == :(=)
-        # AnnAssign
-        if isa(jl_expr.args[1], Expr) && jl_expr.args[1].head == :(::)
-            target = __jl2py(jl_expr.args[1].args[1])
-            annotation = __parse_type(jl_expr.args[1].args[2])
-            value = __jl2py(jl_expr.args[2])
-            return AST.fix_missing_locations(AST.AnnAssign(target, annotation, value, nothing))
+        Expr(:vect, args...) => AST.List(__jl2py(args))
+        Expr(op, target, value) => AST.fix_missing_locations(AST.AugAssign(__jl2py(target),
+                                                                           OP_DICT[op](),
+                                                                           __jl2py(value)))
+        _ => begin
+            @warn("Pattern unmatched")
+            return AST.Constant(nothing)
         end
-
-        # Assign
-        targets = PyList()
-        curr = jl_expr.args
-        while isa(curr[2], Expr) && curr[2].head == :(=)
-            push!(targets, __jl2py(curr[1]))
-            curr = curr[2].args
-        end
-        last_target, value = __jl2py(curr)
-        push!(targets, last_target)
-        return AST.fix_missing_locations(AST.Assign(targets, value))
-    elseif jl_expr.head ∈ [:+=, :-=, :*=, :/=, :÷=, :%=, :^=, :&=, :|=, :⊻=, :(<<=), :(>>=)]
-        target = __jl2py(jl_expr.args[1])
-        value = __jl2py(jl_expr.args[2])
-        return AST.fix_missing_locations(AST.AugAssign(target, OP_DICT[jl_expr.head](), value))
-    elseif jl_expr.head == :vect
-        return AST.List(__jl2py(jl_expr.args))
     end
 end
 
