@@ -8,5 +8,6 @@ MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"
 PythonCall = "6099a3de-0909-46bc-b1f4-468b9a2dfc0d"
 
 [compat]
+MLStyle = "0.4"
 PythonCall = "0.9"
 julia = "1.7"
