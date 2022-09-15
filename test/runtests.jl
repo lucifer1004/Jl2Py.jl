@@ -312,6 +312,11 @@ using Test
             @test jl2py("(x::Float64, y) -> x + y") == "lambda x: float, y, /: x + y"
             @test jl2py("(x::Float64, y)::Float64 -> x + y") == "lambda x: float, y, /: x + y"
             @test jl2py("function (x) x + 1 end") == "lambda x, /: x + 1"
+            @test jl2py("(x; y = 2) -> x + y") == "lambda x, /, *, y=2: x + y"
+            @test jl2py("(x, y = 2) -> x + y") == "lambda x, y=2, /: x + y"
+            @test jl2py("(x; y::Float64 = 2, z = 3) -> x + y") == "lambda x, /, *, y: float=2, z=3: x + y"
+            @test jl2py("(x, pos::Int; y::Float64 = 2, z = 3) -> x + y") ==
+                  "lambda x, pos: int, /, *, y: float=2, z=3: x + y"
             @test_throws ErrorException jl2py("function (x) x + 1; y + 1 end")
         end
 
@@ -328,7 +333,7 @@ using Test
         end
 
         @testset "Unmatched expressions" begin
-            @test jl2py("a = ") == "None"
+            @test (@test_logs (:warn, "Pattern unmatched") jl2py("a = ")) == "None"
         end
     end
 

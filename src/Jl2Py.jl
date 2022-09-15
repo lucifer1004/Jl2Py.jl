@@ -237,8 +237,23 @@ function __parse_lambda(expr::Expr)
         if isa(expr.args[1], Symbol) || expr.args[1].head == :(::)
             arguments = __parse_args([expr.args[1]])
         else
-            expr.args[1].head == :tuple || error("Invalid lambda")
-            arguments = __parse_args(expr.args[1].args)
+            map!(expr.args[1].args, expr.args[1].args) do arg
+                return isa(arg, Expr) && arg.head == :(=) ? Expr(:kw, arg.args[1], arg.args[2]) : arg
+            end
+
+            if expr.args[1].head == :tuple
+                arguments = __parse_args(expr.args[1].args)
+            else
+                expr.args[1].head == :block || error("Invalid lambda")
+                split_pos = findfirst(x -> isa(x, LineNumberNode), expr.args[1].args)
+                wrapped_args = expr.args[1].args[1:(split_pos - 1)]
+                keyword_args = Expr(:parameters,
+                                    map(expr.args[1].args[(split_pos + 1):end]) do arg
+                                        return arg.head == :(=) ? Expr(:kw, arg.args[1], arg.args[2]) : arg
+                                    end...)
+                push!(wrapped_args, keyword_args)
+                arguments = __parse_args(wrapped_args)
+            end
         end
 
         length(body) >= 2 && error("Python lambdas can only have one statement.")

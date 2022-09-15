@@ -1,7 +1,7 @@
+authors = ["Gabriel Wu <wuzihua@pku.edu.cn> and contributors"]
 name = "Jl2Py"
 uuid = "fe5dac85-8b54-4abc-b8de-3413e1fbc3b7"
-authors = ["Gabriel Wu <wuzihua@pku.edu.cn> and contributors"]
-version = "0.1.4"
+version = "0.1.5"
 
 [deps]
 MLStyle = "d8e11817-5142-5d16-987a-aa16d5891078"

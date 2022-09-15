@@ -6,3 +6,4 @@
 /lcov
 /coverage-lcov.info
 /*.jl
+/Manifest.toml
